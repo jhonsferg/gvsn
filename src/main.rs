@@ -11,6 +11,7 @@ mod commands;
 mod config;
 mod dispatch;
 mod fs;
+mod gvm_release;
 mod http;
 mod lock;
 mod profile;
@@ -19,6 +20,7 @@ mod remote;
 mod shell;
 mod tempdir;
 mod toolchain;
+mod update_check;
 mod user_version;
 mod version;
 
@@ -30,19 +32,31 @@ use config::Config;
 use http::HttpClient;
 
 fn main() {
-    if let Err(e) = run() {
+    let cli = Cli::parse();
+
+    // Started before the command's own work so a cache-miss network check
+    // normally overlaps with it instead of adding visible latency. See
+    // `update_check` for the full design (caching, timeouts, suppression).
+    let check = Config::load()
+        .ok()
+        .and_then(|config| update_check::spawn(&config, &cli.command));
+
+    let result = run(cli);
+
+    update_check::print_if_ready(check);
+
+    if let Err(e) = result {
         eprintln!("{} {e:#}", "error:".red().bold());
         std::process::exit(1);
     }
 }
 
-/// Parses the CLI arguments, loads configuration, and runs the selected command.
+/// Loads configuration and runs the selected command.
 ///
 /// # Errors
 ///
 /// Returns an error if configuration cannot be loaded or if the command fails.
-fn run() -> anyhow::Result<()> {
-    let cli = Cli::parse();
+fn run(cli: Cli) -> anyhow::Result<()> {
     let config = Config::load()?;
 
     // Create HTTP client with verbosity and retry settings from CLI

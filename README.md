@@ -501,6 +501,8 @@ gvm upgrade --retries 5  # retry up to 5 times on error
 
 > 🔒 On Unix the replacement is **atomic** (same-filesystem rename). On Windows the old binary is renamed first to free its name, then the new binary takes the original path. A rollback is attempted automatically if the replacement fails.
 
+> 🔔 gvm also checks for updates passively in the background after most commands (cached for 24h, never adds noticeable delay) and prints a short notice when a newer version is available. It never runs for `env`/`path`/`shell`/`completions` (called on every shell prompt) or `upgrade` itself. Disable it entirely with `GVM_NO_UPDATE_CHECK=1`; it's also automatically skipped when `CI` is set.
+
 ---
 
 ### 💣 `gvm implode [--force]`
@@ -608,9 +610,10 @@ This login profile entry is what makes `go` visible to VSCode, GoLand, and other
 
 ## ⚙️ Configuration
 
-| Variable  | Default  | Description                        |
-| --------- | -------- | ---------------------------------- |
-| `GVM_DIR` | `~/.gvm` | 📁 Root directory for all gvm data |
+| Variable               | Default  | Description                                       |
+| ---------------------- | -------- | --------------------------------------------------|
+| `GVM_DIR`              | `~/.gvm` | 📁 Root directory for all gvm data                |
+| `GVM_NO_UPDATE_CHECK`  | unset    | 🔕 Set to disable the background update notice     |
 
 ### 📂 Directory layout
 

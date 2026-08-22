@@ -19,28 +19,17 @@ use anyhow::{Context, Result};
 use colored::Colorize;
 use std::path::Path;
 
-use crate::{archive::download, config::Config, http::HttpClient, lock};
-
-/// GitHub repository slug used to build the Releases API URL.
-const REPO: &str = "jhonsferg/gvm-rs";
-
-/// Returns the GitHub API base URL, overridable via `GVM_TEST_API_BASE` for
-/// local testing without a real GitHub release.
-fn api_base() -> String {
-    std::env::var("GVM_TEST_API_BASE").unwrap_or_else(|_| "https://api.github.com".to_owned())
-}
+use crate::{
+    archive::download,
+    config::Config,
+    gvm_release::{api_base, parse_semver, GithubRelease, REPO},
+    http::HttpClient,
+    lock,
+};
 
 /// Returns the GitHub download base URL, overridable via `GVM_TEST_DL_BASE`.
 fn dl_base() -> String {
     std::env::var("GVM_TEST_DL_BASE").unwrap_or_else(|_| "https://github.com".to_owned())
-}
-
-/// Minimal shape of the GitHub Releases API response.
-///
-/// Only `tag_name` is needed; the rest of the payload is ignored.
-#[derive(serde::Deserialize)]
-struct GithubRelease {
-    tag_name: String,
 }
 
 /// Checks for a newer gvm release and replaces the binary if one is found.
@@ -140,17 +129,6 @@ pub fn run(config: &Config, client: &HttpClient, force: bool) -> Result<()> {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-/// Parses a `"MAJOR.MINOR.PATCH"` string into a comparable tuple.
-///
-/// Returns `None` when the string does not match the expected format.
-fn parse_semver(s: &str) -> Option<(u32, u32, u32)> {
-    let mut parts = s.split('.').filter_map(|p| p.parse::<u32>().ok());
-    let major = parts.next()?;
-    let minor = parts.next()?;
-    let patch = parts.next()?;
-    Some((major, minor, patch))
-}
 
 /// Returns the release archive name for the current platform and architecture.
 ///
@@ -329,7 +307,7 @@ fn replace_binary_at(new_binary: &Path, exe: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_upgrade_binary, parse_semver, release_archive_name, replace_binary_at};
+    use super::{extract_upgrade_binary, release_archive_name, replace_binary_at};
     use std::path::Path;
     use tempfile::tempdir;
 
@@ -417,22 +395,6 @@ mod tests {
         let final_contents = std::fs::read(&target).unwrap();
         assert_eq!(final_contents, b"new contents");
         assert!(!new_binary.exists(), "staged file must be consumed");
-    }
-
-    #[test]
-    fn semver_parses_correctly() {
-        assert_eq!(parse_semver("1.2.3"), Some((1, 2, 3)));
-        assert_eq!(parse_semver("0.1.0"), Some((0, 1, 0)));
-        assert_eq!(parse_semver("10.0.0"), Some((10, 0, 0)));
-        assert_eq!(parse_semver("bad"), None);
-        assert_eq!(parse_semver("1.2"), None);
-    }
-
-    #[test]
-    fn semver_ordering() {
-        assert!(parse_semver("0.2.0") > parse_semver("0.1.9"));
-        assert!(parse_semver("1.0.0") > parse_semver("0.99.99"));
-        assert_eq!(parse_semver("1.0.0"), parse_semver("1.0.0"));
     }
 
     #[test]
