@@ -12,7 +12,7 @@
 This document consolidates everything learned about the payload distributed by the malicious clone,
 combining the earlier **static** analysis with a new **dynamic/behavioral** analysis performed with a
 purpose-built instrumented LuaJIT harness. Its goal is twofold: (1) give GitHub Trust & Safety
-concrete behavioral evidence — not just file hashes — so the malicious repository is acted on, and
+concrete behavioral evidence - not just file hashes - so the malicious repository is acted on, and
 (2) document the technique end-to-end so other maintainers can recognize and defend against it.
 
 ---
@@ -32,7 +32,7 @@ behavioral chain and its **network indicators**:
   under a spoofed Chrome `148.0.0.0` User-Agent, after an `https://www.microsoft.com` connectivity
   canary.
 - **Blockchain-based C2 (EtherHiding):** a JSON-RPC `eth_call` invoking **`getData()`** (selector
-  `0x3bc5de30`) on contract `0x1823A9a0Ec8e0C25dD957D0841e3D41a4474bAdc` — the real C2 address is
+  `0x3bc5de30`) on contract `0x1823A9a0Ec8e0C25dD957D0841e3D41a4474bAdc` - the real C2 address is
   read from on-chain data, a takedown-resistant dead-drop technique.
 - **Persistence:** `schtasks /create /sc daily /st 13:19 /f` (scheduled task, daily at 13:19).
 - **Campaign mutex:** `h9yzxjiyo8oeqbqnnf91vnrynkkvzvxq7ce7tg5ca779mq2zww8qdccogaagypk74mz6m6jbthtlsvzojd8ixzbn7eir7`.
@@ -76,7 +76,7 @@ flowchart LR
 
 **Why this evades naive detection:** every legitimate `gvm-rs` binary is built and published only via
 this repository's own `release.yml` pipeline with checksums and a VirusTotal scan. The clone has zero
-releases and points its "download" button at a source-tree zip — no provenance, no scan, no signature.
+releases and points its "download" button at a source-tree zip - no provenance, no scan, no signature.
 
 ---
 
@@ -89,7 +89,7 @@ obfuscation:
 - **Arithmetic-obfuscated constants** in place of literals, e.g. `321916+((-253077-38487)+-30351)`.
 - A large **dispatch loop keyed on those constants** (a custom VM), so there is no linear
   "read the strings" path.
-- Crucially, **any IOC strings (URLs, C2 hosts) are reconstructed only at runtime** — they are never
+- Crucially, **any IOC strings (URLs, C2 hosts) are reconstructed only at runtime** - they are never
   present as plaintext. A best-effort static search for `http(s)://`, IPv4 literals, and Discord
   webhook paths found **none** (documented in §B of the incident report). This is precisely why a
   dynamic harness was necessary.
@@ -129,7 +129,7 @@ Key safety properties of the harness (`~/lab/tools/luajit-harness/sandbox.lua`):
   pointer it computed via export-hash resolution, and without this stub the harness would have jumped
   into attacker-controlled native code.
 - **`getfenv`/`setfenv`/`_ENV` are total replacements** that always return the sandboxed table and log
-  a `sandbox_escape_probe` — real `getfenv(0)` in Lua 5.1 returns the *real* global table and would
+  a `sandbox_escape_probe` - real `getfenv(0)` in Lua 5.1 returns the *real* global table and would
   have leaked `os.execute`.
 - The container provides a second, independent verification layer: `strace` showed **zero**
   network-family syscalls (`socket|connect|sendto|recvfrom`) across every run, confirming nothing
@@ -200,7 +200,7 @@ on a file pulled from this repo's `raw.githubusercontent.com` link and (b) the e
 
 - **The final C2 destination was not observed directly.** The payload resolves it by calling
   `getData()` on an Ethereum contract via JSON-RPC. A stateful fake-network harness answered with a
-  decoy body; the payload **validated and rejected it**, then aborted cleanly on an internal nil —
+  decoy body; the payload **validated and rejected it**, then aborted cleanly on an internal nil -
   confirming the `eth_call` is the C2-resolution step and that it is guarded against generic fake
   responses (additional anti-analysis). The contract address and selector remain hard IOCs.
 - **The contract carries no on-chain code right now.** `eth_getCode` against Ethereum mainnet, BSC,
@@ -260,7 +260,7 @@ on a file pulled from this repo's `raw.githubusercontent.com` link and (b) the e
 
 ### 7.5 Not recovered
 
-- The final decoded C2 destination (behind the `getData()` contract call — the payload rejected a
+- The final decoded C2 destination (behind the `getData()` contract call - the payload rejected a
   decoy response, confirming it validates the result; see §6).
 - The on-chain C2 content: the contract currently holds **no code** on any major EVM chain
   (pre-positioned dead-drop; see §6).
@@ -274,11 +274,11 @@ This technique generalizes beyond this one repository. To defend your own projec
 
 1. **Watch for clones that distribute source-tree binaries.** A legitimate project ships binaries via
    GitHub Releases with checksums; a clone whose README points a "download" button at a `raw` zip in
-   `src/` has no provenance. (This repository's `clone-watch` pipeline caught exactly this —
+   `src/` has no provenance. (This repository's `clone-watch` pipeline caught exactly this -
    see `.github/scripts/clone-deep-scan.sh`.)
 2. **Treat renamed scripting engines as a red flag.** A `.exe` that is byte-identical to a stock
    interpreter (LuaJIT, Python, Node) plus a "data" script it interprets is a LOLBIN pattern. Check
-   PE imports: a genuine LuaJIT imports only `lua51.dll` + CRT — the malicious logic is in the script.
+   PE imports: a genuine LuaJIT imports only `lua51.dll` + CRT - the malicious logic is in the script.
 3. **Flag the behavioral triad** in any sandbox/EDR: *console hiding* + *RWX allocation* +
    *PEB/export walking* together are highly specific to reflective loaders, regardless of language.
 4. **Don't rely on static string IOCs for VM-obfuscated scripts.** If strings are rebuilt at runtime,

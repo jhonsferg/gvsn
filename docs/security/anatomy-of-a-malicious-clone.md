@@ -1,16 +1,16 @@
 # Anatomy of a Malicious Repository Clone
 
 **A real case study: how an attacker cloned `gvm-rs`, hid a Lua-based infostealer behind fake
-commits, and tried to trick users into running it — and how we caught and fully documented it.**
+commits, and tried to trick users into running it - and how we caught and fully documented it.**
 
-> **TL;DR** — An attacker created `Foremost-headsail607/gvm-rs`, a byte-for-byte copy of this
+> **TL;DR** - An attacker created `Foremost-headsail607/gvm-rs`, a byte-for-byte copy of this
 > project's history, then added a malware chain disguised as ordinary project files. Its README
 > "download" button points at a zip containing a **renamed legitimate LuaJIT interpreter** plus an
 > **obfuscated Lua script** that profiles the victim, gets its command-and-control address from an
 > Ethereum smart contract, installs a daily scheduled task for persistence, and stages an
 > infostealer. We detected it with an automated clone-watch, analyzed it **without ever running the
 > Windows binary** (using an instrumented LuaJIT sandbox), and recovered its full behavior and
-> network indicators. **No user of the genuine `gvm-rs` is affected** — real releases only ever come
+> network indicators. **No user of the genuine `gvm-rs` is affected** - real releases only ever come
 > from [GitHub Releases](../../README.md#-installation), never from a zip committed into `src/`.
 
 ---
@@ -77,18 +77,18 @@ flowchart TB
 
 - **The malicious repository:** [`Foremost-headsail607/gvm-rs`](https://github.com/Foremost-headsail607/gvm-rs)
   (created 2026-06-16). It began as an exact copy of this project's git history, then diverged to add
-  the malware chain. It is **not** a fork (GitHub `fork: false`) — it's an impersonation.
+  the malware chain. It is **not** a fork (GitHub `fork: false`) - it's an impersonation.
 - **The campaign context:** this matches a broader 2026 wave of **fake-repository clones** that
-  security researchers call **"SmartLoader → StealC"** — over a hundred lookalike repos delivering a
+  security researchers call **"SmartLoader → StealC"** - over a hundred lookalike repos delivering a
   Lua-based loader that stages the **StealC infostealer**. The naming (`Lua/Agent.CQ`, a Lua-based
   trojan family, per ESET) and the delivery mechanism line up exactly.
 - **Attribution limits:** we can describe *what* they did and *how*, with high confidence, but not
-  *who they are* as individuals — that requires platform-level data only GitHub holds. This is one
+  *who they are* as individuals - that requires platform-level data only GitHub holds. This is one
   reason a complete abuse report (with behavioral evidence, which the first report lacked) matters.
 - **What happened when we reported it:** the first report (2026-07-20, Ticket ID `4587510`) included
   file hashes, VirusTotal results, and a full commit-history reconstruction. The reply, received the
   next day on the same ticket, didn't mention the reported repository, the malware, or any of the
-  evidence at all — it addressed an unrelated Copilot-access restriction. See
+  evidence at all - it addressed an unrelated Copilot-access restriction. See
   [§D of the incident report](incidents/2026-06-malicious-clone-foremost-headsail607.md#d-githubs-response-to-the-first-report)
   for the full exchange. This is why the 2026-08-22 dynamic analysis was filed as a new report
   rather than a reply on that thread.
@@ -98,7 +98,7 @@ flowchart TB
 ## 3. What they tried to slip past users
 
 The trap is **social engineering layered on top of a technical chain**. A user lands on a repo that
-*looks* like the real `gvm-rs` — same name, same README, same history. The only difference: the
+*looks* like the real `gvm-rs` - same name, same README, same history. The only difference: the
 "download" button doesn't go to a signed, checksummed GitHub Release (how the real project ships).
 It points at a **zip file committed directly into the source tree**.
 
@@ -117,7 +117,7 @@ flowchart LR
 ```
 
 Inside that zip are four files. Their SHA-256 hashes match the artifacts first seen in the repo's
-June commit history — confirming this is the *same* known payload, still actively distributed:
+June commit history - confirming this is the *same* known payload, still actively distributed:
 
 | File | Size | What it claims to be | What it actually is |
 |---|---|---|---|
@@ -148,7 +148,7 @@ sequenceDiagram
     Note over J: the malicious logic lives HERE,<br/>not in the .exe
 ```
 
-**Why this defeats naive antivirus:** `minify.exe` is byte-for-byte a stock, trusted LuaJIT build —
+**Why this defeats naive antivirus:** `minify.exe` is byte-for-byte a stock, trusted LuaJIT build -
 its PE imports are only `lua51.dll` + the C runtime, no networking or injection APIs. A signature
 that looks at the `.exe` sees a legitimate program. The malicious logic never appears in the
 executable; it's in the script the interpreter runs. This is the
@@ -170,10 +170,10 @@ virtualization-style obfuscation:
 
 - Single/double-letter identifiers throughout.
 - **Arithmetic-obfuscated constants** instead of literals, e.g. `321916+((-253077-38487)+-30351)`.
-- A large **dispatch loop keyed on those constants** — a custom virtual machine — so there's no
+- A large **dispatch loop keyed on those constants** - a custom virtual machine - so there's no
   linear "read the strings" path.
 - **Every interesting string (URLs, API names, the C2) is rebuilt at runtime** and never stored as
-  plaintext. A static grep for `http://`, IP addresses, or webhook paths finds **nothing** — which
+  plaintext. A static grep for `http://`, IP addresses, or webhook paths finds **nothing** - which
   is exactly why static analysis alone couldn't recover the C2, and why dynamic analysis was needed.
 
 ```mermaid
@@ -194,7 +194,7 @@ flowchart LR
 ## 6. What the malware actually does, step by step
 
 This is the payload's **observed** behavior, captured deterministically across runs by an
-instrumented LuaJIT sandbox (48,216 telemetry events). Not speculation — every step below is backed
+instrumented LuaJIT sandbox (48,216 telemetry events). Not speculation - every step below is backed
 by a logged call.
 
 ```mermaid
@@ -235,17 +235,17 @@ sequenceDiagram
 | 2 | Hide the console window | Runs invisibly so the victim sees nothing. |
 | 3 | Allocate **RWX** memory | Prepares space to run downloaded/decrypted code (the second stage). |
 | 4 | Resolve APIs **by hash** (PEB + export-table walk) | Avoids `GetProcAddress`, defeating import-table inspection and EDR hooks. |
-| 5 | Load `wininet`, `shell32`, `advapi32`, `shlwapi`, `winbrand` | Pulls in networking, command execution, registry/crypto, path utilities, and OS-version info — the toolkit of an infostealer. |
+| 5 | Load `wininet`, `shell32`, `advapi32`, `shlwapi`, `winbrand` | Pulls in networking, command execution, registry/crypto, path utilities, and OS-version info - the toolkit of an infostealer. |
 | 6 | Create an 80-char mutex | Ensures only one copy runs; doubles as a stable campaign ID. |
 | 7 | Canary to `microsoft.com` | Confirms internet access before doing anything noisy. |
 | 8 | `GET ip-api.com/json/` | Profiles the victim: public IP, country, ISP. Stealers use this to filter by region. |
-| 9 | `eth_call` → `getData()` on a contract | Gets the **real C2 address from the blockchain** — see §7.4. |
-| 10 | `schtasks /create /sc daily /st 13:19 /f` | Reinstalls itself every day at 13:19 — **persistence**. |
+| 9 | `eth_call` → `getData()` on a contract | Gets the **real C2 address from the blockchain** - see §7.4. |
+| 10 | `schtasks /create /sc daily /st 13:19 /f` | Reinstalls itself every day at 13:19 - **persistence**. |
 | 11 | Stage the infostealer | The end goal: steal browser credentials, sessions, crypto wallets, etc. |
 
 **In one sentence:** it profiles the victim, fetches its real command-and-control address from an
 Ethereum contract so it can't be taken down, installs itself permanently, and stages an infostealer
-— all while looking like a legitimate developer tool.
+- all while looking like a legitimate developer tool.
 
 ---
 
@@ -254,12 +254,12 @@ Ethereum contract so it can't be taken down, installs itself permanently, and st
 ### 7.1 Impersonation via history cloning
 The repo copied the project's real history, then **hid the malware commits behind a benign-looking
 commit message** copy-pasted verbatim from the genuine project (`fix(download): enable steady tick
-on chunk bars...`). A casual `git log` skim shows four identical, boring commits — nothing that says
+on chunk bars...`). A casual `git log` skim shows four identical, boring commits - nothing that says
 "added an exe". The deletions 47 minutes later used honest messages, suggesting the adds were
 scripted and the removes done by hand.
 
 The social-engineering goes further than the code: the clone's README was rewritten to target
-**non-technical Windows users**, and — critically — it **told users to ignore the Windows SmartScreen
+**non-technical Windows users**, and - critically - it **told users to ignore the Windows SmartScreen
 warning** with wording like *"Run anyway, this is normal"*. Instructing users to bypass an OS
 security warning is one of the strongest possible red flags: legitimate projects never ask you to do
 this (see [`SECURITY.md`](../../SECURITY.md)).
@@ -271,7 +271,7 @@ engines (LuaJIT, Python, Node) plus a "data" file they interpret as a red flag.
 
 ### 7.3 Control-flow-flattening obfuscation + runtime string rebuilding
 The payload is a custom VM with no readable strings on disk. *Defense:* for VM-obfuscated scripts,
-you need a sandbox with full API instrumentation to capture the strings it rebuilds at runtime —
+you need a sandbox with full API instrumentation to capture the strings it rebuilds at runtime -
 static string extraction alone fails.
 
 ### 7.4 EtherHiding (blockchain-based C2)
@@ -279,7 +279,7 @@ Instead of hardcoding a server, the malware reads its C2 address **from data sto
 smart contract**, via a normal `eth_call` (a read-only JSON-RPC call that looks like ordinary web
 traffic). This is called **EtherHiding**: the C2 lives on-chain, so it can't be seized or taken down
 like a normal server or domain. In this case the contract holds **no code on any major chain right
-now** — a *pre-positioned dead-drop* the operator populates only when the campaign goes live.
+now** - a *pre-positioned dead-drop* the operator populates only when the campaign goes live.
 
 ### 7.5 API resolution by hash
 The loader walks the PEB and PE export tables to find Windows APIs **by hashing their names**, never
@@ -288,7 +288,7 @@ analysts inspect. Resolving by hash leaves almost no static trace of which APIs 
 
 ### 7.6 Legitimate-looking traffic
 The connectivity canary hits `microsoft.com`, and the C2-related request uses a **spoofed Chrome
-`148.0.0.0` User-Agent** — designed to blend into normal browsing and pass egress filters that only
+`148.0.0.0` User-Agent** - designed to blend into normal browsing and pass egress filters that only
 allow "browser-like" traffic.
 
 ---
@@ -308,7 +308,7 @@ allow "browser-like" traffic.
 | Type | Indicator | Role |
 |---|---|---|
 | Ethereum contract | `0x1823A9a0Ec8e0C25dD957D0841e3D41a4474bAdc` | EtherHiding C2 dead-drop (`getData()`) |
-| Function selector | `0x3bc5de30` | `getData()` — reads C2 config on-chain |
+| Function selector | `0x3bc5de30` | `getData()` - reads C2 config on-chain |
 | Domain | `ip-api.com` (port 80, `GET /json/`) | Victim IP geolocation/ISP profiling |
 | URL | `https://www.microsoft.com` | Connectivity canary |
 | User-Agent | `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36` | Spoofed browser UA |
@@ -351,9 +351,9 @@ flowchart TB
 
 Key safety properties:
 
-- `ffi.C.*` never resolves to a real C function — a pure-Lua table intercepts everything, so the
+- `ffi.C.*` never resolves to a real C function - a pure-Lua table intercepts everything, so the
   script can't touch real memory, syscalls, or sockets.
-- `ffi.cast` to any **function-pointer** type returns an inert Lua stub, never executable code —
+- `ffi.cast` to any **function-pointer** type returns an inert Lua stub, never executable code -
   this was the single most important control, because the loader's whole trick is calling computed
   function pointers.
 - The container ran with no network interface, and `strace` independently confirmed **zero** network
@@ -370,12 +370,12 @@ Full methodology: [`lua-trojan-defensive-analysis.md`](lua-trojan-defensive-anal
   the [README](../../README.md#-installation). Real releases always have a `checksums.txt` and a
   VirusTotal scan.
 - **Be suspicious of any "download" that points at a file committed into a source tree** (`src/`,
-  `raw.githubusercontent.com/.../something.zip`) instead of a proper Release — especially if the repo
+  `raw.githubusercontent.com/.../something.zip`) instead of a proper Release - especially if the repo
   has no releases at all.
 - **Verify the SHA-256** of anything you download against the published `checksums.txt` before
   running it.
 - **If you (or someone you know) installed `gvm` from `Foremost-headsail607/gvm-rs` or any
-  `raw.githubusercontent.com` link:** treat the machine as compromised. Do not just delete the file —
+  `raw.githubusercontent.com` link:** treat the machine as compromised. Do not just delete the file -
   the payload persists via a scheduled task. Follow your antivirus vendor's removal guidance and
   change any credentials stored in browsers on that machine.
 - **Check for the persistence task**: look for an unexpected daily scheduled task at **13:19** and
@@ -392,7 +392,7 @@ This technique generalizes to any open-source project. Concrete defenses:
    ([`.github/scripts/clone-deep-scan.sh`](../../.github/scripts/clone-deep-scan.sh)) caught this
    one automatically.
 2. **Pin your distribution channel.** Make it unambiguous that binaries only come from *your*
-   Releases, and say so prominently — so a source-tree zip immediately stands out as wrong.
+   Releases, and say so prominently - so a source-tree zip immediately stands out as wrong.
 3. **Sign your releases.** Code signing (and published checksums) removes the "unknown publisher"
    ambiguity attackers exploit; see [`SECURITY.md`](../../SECURITY.md) § code signing.
 4. **Document the pattern.** Publishing a clear incident writeup (like this one) helps the whole
@@ -410,9 +410,9 @@ Transparency about where this stands, so other reporters know what to expect:
 
 - **First abuse report** (2026-07-20): filed via GitHub's abuse form with static indicators (file
   hashes, the loader chain, the commit-history evidence). **The response did not address the
-  report** — the repository stayed up. This is a common outcome when a report contains only hashes
+  report** - the repository stayed up. This is a common outcome when a report contains only hashes
   and metadata: without *behavioral* evidence, it's hard for a trust-and-safety team to act quickly.
-- **Updated report** (2026-08-22): rebuilt with the dynamic analysis in this document — the
+- **Updated report** (2026-08-22): rebuilt with the dynamic analysis in this document - the
   payload's **behavior, its network indicators, and its C2 mechanism** (the Ethereum `getData()`
   contract, the `ip-api.com` profiling, the persistence task). Behavioral evidence is materially
   harder to dismiss than hashes.
@@ -421,7 +421,7 @@ Transparency about where this stands, so other reporters know what to expect:
   resolves.
 
 **Lesson for other maintainers:** a hash list alone rarely moves a platform to act. What moves them
-is *concrete, reproducible behavior* — which is why we invested in a dynamic sandbox rather than
+is *concrete, reproducible behavior* - which is why we invested in a dynamic sandbox rather than
 stopping at static analysis. Publish your evidence the same way and the report is far more likely to
 succeed.
 
@@ -433,12 +433,12 @@ A cloned GitHub repo is only one delivery channel. Campaigns like this routinely
 registries**, where a *typosquatted* package name targets developers who search for or install the
 legitimate project:
 
-- **Rust / crates.io** — a malicious crate can execute code at **compile time** via a `build.rs`
+- **Rust / crates.io** - a malicious crate can execute code at **compile time** via a `build.rs`
   build script, before any library code is ever reviewed or run. That is a pre-review code-execution
   point that bypasses the normal assumption that an unreviewed dependency stays inert. We checked for
   a typosquat of `gvm-rs` on crates.io and prepared a preventive report; the search came back clean
   **as of this writing**, and we are considering defensively registering the name to close that door.
-- **npm, PyPI, NuGet, Go modules** — the same typosquatting and `install`/`preinstall`/`postinstall`
+- **npm, PyPI, NuGet, Go modules** - the same typosquatting and `install`/`preinstall`/`postinstall`
   script vectors apply across ecosystems.
 
 **If you maintain a project in any ecosystem:** the red flags in §11 apply there too. Search your

@@ -180,9 +180,9 @@ syscalls at the OS level (verified via `strace`).
 
 **Observed behavior** (deterministic across runs; 48,216 telemetry events):
 
-1. `getfenv(nil)` — sandbox-escape probe (anti-analysis).
-2. `GetConsoleWindow()` + `ShowWindow(hwnd, SW_HIDE)` — hides the console window.
-3. `VirtualAlloc(NULL, 7, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE)` — allocates **RWX** memory.
+1. `getfenv(nil)` - sandbox-escape probe (anti-analysis).
+2. `GetConsoleWindow()` + `ShowWindow(hwnd, SW_HIDE)` - hides the console window.
+3. `VirtualAlloc(NULL, 7, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE)` - allocates **RWX** memory.
 4. Resolves ~190 Win32 APIs **by hash** (PEB + export-table walking, no `GetProcAddress`).
 5. `LdrLoadDll`: `wininet.dll`, `shell32.dll`, `advapi32.dll`, `shlwapi.dll`, `winbrand.dll`.
 6. `CreateMutexW("h9yzxjiyo8oeqbqnnf91vnrynkkvzvxq7ce7tg5ca779mq2zww8qdccogaagypk74mz6m6jbthtlsvzojd8ixzbn7eir7")`.
@@ -190,13 +190,13 @@ syscalls at the OS level (verified via `strace`).
 8. **Victim profiling:** `WinHttpConnect("ip-api.com", 80)` + `WinHttpOpenRequest("GET", "/json/")`
    under a spoofed `Chrome/148.0.0.0` User-Agent.
 9. **Blockchain C2 (EtherHiding):** builds a JSON-RPC `eth_call` invoking `getData()` (selector
-   `0x3bc5de30`) on contract `0x1823A9a0Ec8e0C25dD957D0841e3D41a4474bAdc` — the real C2 address is
+   `0x3bc5de30`) on contract `0x1823A9a0Ec8e0C25dD957D0841e3D41a4474bAdc` - the real C2 address is
    read from on-chain data (takedown-resistant dead-drop).
 10. **Persistence:** `schtasks /create /sc daily /st 13:19 /f` (daily scheduled task at 13:19).
 
 **Limitation:** the final decoded C2 destination was not observed. A stateful fake-network harness
 answered the `getData()` call with a decoy body; the payload **validated and rejected it**, then
-aborted cleanly — confirming the `eth_call` is the C2-resolution step and that it is guarded against
+aborted cleanly - confirming the `eth_call` is the C2-resolution step and that it is guarded against
 generic fake responses (additional anti-analysis). The contract itself currently holds **no code on
 any major EVM chain** (`eth_getCode` returned 0 bytes on Ethereum, BSC, Polygon, Arbitrum, Optimism,
 Base, Avalanche, Gnosis, Sepolia), indicating a **pre-positioned dead-drop** the operator populates
