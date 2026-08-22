@@ -238,7 +238,12 @@ impl ShellConfig for PowerShell {
         powershell::profile_path()
     }
     fn init_line(&self) -> &'static str {
-        "gvm env --shell powershell | Out-String | Invoke-Expression"
+        // Guarded, unlike the other shells' `init_line`s: `eval "$(gvm env ...)"`
+        // in bash/zsh silently evaluates nothing if `gvm` can't run, but
+        // PowerShell's `&`-invocation of a blocked/missing binary (AppLocker,
+        // WDAC, Smart App Control, or simply not yet on PATH) throws a
+        // terminating error, which would otherwise surface on every new shell.
+        "if (Get-Command gvm -ErrorAction SilentlyContinue) { try { gvm env --shell powershell | Out-String | Invoke-Expression } catch {} }"
     }
     fn wrapper_function(&self) -> &'static str {
         powershell::wrapper_function()
