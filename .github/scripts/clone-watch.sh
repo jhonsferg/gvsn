@@ -32,6 +32,7 @@ ALLOWLIST_FILE="${ALLOWLIST_FILE:-.github/clone-watch-allowlist.txt}"
 LABEL="clone-watch"
 CONTENT_SCORE_THRESHOLD="${CONTENT_SCORE_THRESHOLD:-40}"
 SIMILARITY_SCRIPT="$(dirname "${BASH_SOURCE[0]}")/clone-similarity.sh"
+DEEP_SCAN_SCRIPT="$(dirname "${BASH_SOURCE[0]}")/clone-deep-scan.sh"
 
 is_allowlisted() {
   local candidate_owner_lower
@@ -135,6 +136,35 @@ while IFS= read -r match; do
   created="$(echo "$match" | cut -d'|' -f4)"
   reason="$(echo "$match" | cut -d'|' -f5)"
   body="${body}| \`${full_name}\` | \`${owner}\` | ${reason} | ${created} | ${url} |
+"
+done <<< "$new_findings"
+
+echo "== Deep-scanning new findings for concrete evidence (this may take a while) =="
+body="${body}
+## Deep scan
+
+Behavior-based forensic checks against each finding above - see
+\`.github/scripts/clone-deep-scan.sh\` for what each check looks for and why. Best-effort: a scan
+that fails or times out is skipped rather than blocking the whole run, and its absence here is not
+evidence the repository is clean.
+"
+
+while IFS= read -r match; do
+  [ -z "$match" ] && continue
+  full_name="$(echo "$match" | cut -d'|' -f1)"
+  owner="$(echo "$match" | cut -d'|' -f2)"
+  repo_name_only="$(echo "$full_name" | cut -d'/' -f2)"
+
+  echo "-- deep scan: $full_name --"
+  scan_report="$(timeout 240 bash "$DEEP_SCAN_SCRIPT" "$owner" "$repo_name_only" 2>&1 || echo "_Deep scan failed or timed out for ${full_name} - skipped._")"
+
+  body="${body}
+<details>
+<summary>\`${full_name}\`</summary>
+
+${scan_report}
+
+</details>
 "
 done <<< "$new_findings"
 

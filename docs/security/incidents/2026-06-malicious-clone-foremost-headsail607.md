@@ -20,10 +20,11 @@ handled.
 ## Summary
 
 `Foremost-headsail607/gvm-rs` began as a copy of this project's genuine history, then diverged to
-add a malware-loading chain to the source tree, later stripped that chain from the visible
-history (very likely a rebase/force-push, since removal commits exist with no matching addition
-commits), and now distributes a packaged payload directly from source control instead of through
-GitHub Releases. As of today, its README actively links to that payload.
+add a malware-loading chain to the source tree - each addition hidden behind a commit message
+copy-pasted from a real, unrelated commit in this project's own history rather than any history
+rewrite - later deleted that chain through honestly-labeled removal commits, and now distributes a
+packaged payload directly from source control instead of through GitHub Releases. As of today, its
+README actively links to that payload.
 
 ## Timeline
 
@@ -31,8 +32,8 @@ GitHub Releases. As of today, its README actively links to that payload.
 |---|---|
 | up to 2026-06-14T02:15:55Z | Commit history is byte-for-byte identical to `jhonsferg/gvm-rs` (last shared commit: `5c43d25445`) |
 | 2026-06-16T03:52:03Z | Repository `Foremost-headsail607/gvm-rs` created |
-| 2026-06-16 - 2026-06-17 | Several commits reapplying the same `fix(download): enable steady tick on chunk bars for real-time updates` message four times in a row - consistent with a rebase/history rewrite |
-| 2026-06-17T14:12:25Z - 14:12:55Z | Four files removed within 30 seconds of each other (see [Technical findings](#technical-findings)); no corresponding "add" commits exist in the visible history for any of them |
+| 2026-06-17T13:24:32Z - 13:24:48Z | Four files added within a 16-second window, each commit reusing the same real-but-unrelated message `fix(download): enable steady tick on chunk bars for real-time updates` to disguise what changed (see [Technical findings](#technical-findings)) |
+| 2026-06-17T14:12:25Z - 14:12:55Z | The same four files removed within a 30-second window, this time through honestly-labeled `Remove <path>` commits |
 | 2026-07-21T08:43:06Z | This repository's clone-watch flags the account (issue #53) |
 | (undated, prior to today) | First report filed with GitHub via the abuse form; response received did not address the report |
 | 2026-08-22T03:03:47Z | Latest commit: `README.md` updated to point the download button directly at a packaged payload (see below) |
@@ -41,17 +42,36 @@ GitHub Releases. As of today, its README actively links to that payload.
 
 ### A. Commit history reconstruction
 
-#### 1. A malware-loading chain existed in the source tree, then was removed from history
+#### 1. A malware-loading chain was added under a spoofed commit message, then removed
 
-Four files were deleted from the repository within a 30-second window
-(commits `cb1dc59da0`, `207e24e026`, `aa7ac2f188`, `77e76f9e46`, all at 2026-06-17T14:12:xxZ).
-None of them have a matching "add" commit anywhere in the repository's visible history, which is
-only possible if the branch was rewritten (`git rebase` + force-push, or a squash) at some point -
-the "add" commits exist as objects but were pruned from the ref history GitHub now serves.
+**Correction (2026-08-22):** an earlier revision of this document concluded the four "add" commits
+for these files were missing from history entirely, implying a rebase/force-push. Automated
+re-scanning (`.github/scripts/clone-deep-scan.sh`) found the real add commits, which a manual
+`git log` skim had missed because of what they turn out to be: each add is hidden behind a commit
+message copy-pasted verbatim from a real, benign commit in this project's own genuine history
+(`fix(download): enable steady tick on chunk bars for real-time updates`) - it does not describe
+the change it's attached to at all. That's why a glance at the log shows nothing alarming: four
+identical, boring-looking commit messages, no "add exe" or "add payload" text anywhere.
+
+| Commit | Time (UTC) | Message shown in `git log` | File actually added |
+|---|---|---|---|
+| `610b5467bc` | 13:24:32 | `fix(download): enable steady tick on chunk bars for real-time updates` | `src/commands/jsm-v1.3.txt` |
+| `0eea582922` | 13:24:36 | (same, reused) | `assets/images/Launcher-masterling.bat` |
+| `654e77e9ef` | 13:24:43 | (same, reused) | `install/lua51_2.6.dll` |
+| `13c5fe6078` | 13:24:48 | (same, reused) | `src/remote/minify_3.2.exe` |
+
+All four were added within a 16-second window, then deleted roughly 47 minutes later - this time
+through commits with honest, self-describing messages (`cb1dc59da0` "Remove
+assets/images/Launcher-masterling.bat", `207e24e026` "Remove install/lua51_2.6.dll", `aa7ac2f188`
+"Remove src/commands/jsm-v1.3.txt", `77e76f9e46` "Remove src/remote/minify_3.2.exe", all within a
+30-second window at 14:12:xx). The asymmetry - disguised on the way in, honestly labeled on the way
+out - is consistent with the additions being scripted/automated (reusing a cached or templated
+commit message) while the removals were done manually, e.g. through GitHub's web UI file-delete
+flow, which generates a "Remove `<path>`" message by default.
 
 | Path | Role |
 |---|---|
-| `assets/images/Launcher-masterling.bat` | Launcher script. Deleted content (recovered from the removal commit's diff): `start minify.exe jsm.txt` |
+| `assets/images/Launcher-masterling.bat` | Launcher script. Content (recovered from the removal commit's diff, and confirmed byte-for-byte in [Section B](#b-static-analysis-of-the-currently-distributed-payload-archive)): `start minify.exe jsm.txt` |
 | `src/remote/minify_3.2.exe` | Executable disguised as a "minifier" tool, placed in `src/remote/` - not a plausible location for a build tool |
 | `src/commands/jsm-v1.3.txt` | Payload disguised with a `.txt` extension, passed as the argument to the `.exe` above |
 | `install/lua51_2.6.dll` | The Lua 5.1 interpreter runtime, placed in `install/` |
@@ -159,7 +179,10 @@ Two separate methods were used, matching the two subsections above:
 
 - **§A** (commit history) comes entirely from GitHub's REST API (`/commits`, `/commits/{sha}`,
   `/readme`, `/releases`) - commit metadata and text diffs only. No file was downloaded for this
-  part.
+  part. The 2026-08-22 correction to §A.1 (spoofed commit messages, not a history rewrite) was found
+  by [`.github/scripts/clone-deep-scan.sh`](../../../.github/scripts/clone-deep-scan.sh), the
+  clone-watch pipeline's automated second-stage scanner - it walks a candidate's full commit-level
+  file history rather than a manual `git log` skim, which is what the original analysis missed.
 - **§B** (payload archive) required downloading the archive to inspect it. This was done as
   follows, to keep the payload contained and never executed:
   1. The archive was fetched into a Docker named volume by a short-lived, network-enabled
