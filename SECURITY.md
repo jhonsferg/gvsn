@@ -150,11 +150,15 @@ but every credible report will be investigated and escalated to GitHub Trust & S
   does - its README links directly to an archive committed inside `src/`
   (`gvm-rs-xiphisternal.zip`), bypassing this repository's build, checksum, and
   [VirusTotal-scan](#antivirus--windows-defender-false-positives) process entirely. This was
-  reported through [GitHub's abuse form](https://github.com/contact/report-abuse); the response
-  received did not address the report. The clone was still active and receiving pushes as of
+  reported through [GitHub's abuse form](https://github.com/contact/report-abuse) on 2026-07-20
+  (Ticket ID `4587510`); the reply received the next day did not reference the report, the
+  repository, or the evidence submitted - it addressed an unrelated Copilot-access restriction on
+  the same ticket. The clone was still active and receiving pushes as of
   2026-08-22. Full technical writeup, including commit hashes, the recovered malware-loader
   chain, and its correlation with a real antivirus detection:
   [`docs/security/incidents/2026-06-malicious-clone-foremost-headsail607.md`](docs/security/incidents/2026-06-malicious-clone-foremost-headsail607.md).
+  For a plain-language walkthrough of the whole attack (what the malware does, its techniques,
+  IOCs, and how to protect yourself): [`docs/security/anatomy-of-a-malicious-clone.md`](docs/security/anatomy-of-a-malicious-clone.md).
 - If you installed `gvm` from anywhere other than the
   [official releases](https://github.com/jhonsferg/gvm-rs/releases) or the install commands in the
   [README](README.md#-installation), do not run it - verify what you downloaded, or reinstall from

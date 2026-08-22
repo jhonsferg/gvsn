@@ -4,8 +4,9 @@
 - **Malicious repository:** [`Foremost-headsail607/gvm-rs`](https://github.com/Foremost-headsail607/gvm-rs)
 - **Detected via:** this repository's automated clone-watch pipeline
   ([issue #53](https://github.com/jhonsferg/gvm-rs/issues/53))
-- **Reported to GitHub:** yes, via the [abuse report form](https://github.com/contact/report-abuse);
-  the response received did not address the report
+- **Reported to GitHub:** yes, via the [abuse report form](https://github.com/contact/report-abuse)
+  on 2026-07-20T20:42:00Z (Ticket ID `4587510`); the response received on 2026-07-21T11:50:00Z did
+  not address the report - see [§D](#d-githubs-response-to-the-first-report)
 - **Related policy:** [SECURITY.md § Malicious forks / clones](../../../SECURITY.md#malicious-forks--clones)
 
 This document exists to give anyone evaluating this incident - GitHub Trust & Safety, security
@@ -34,8 +35,9 @@ README actively links to that payload.
 | 2026-06-16T03:52:03Z | Repository `Foremost-headsail607/gvm-rs` created |
 | 2026-06-17T13:24:32Z - 13:24:48Z | Four files added within a 16-second window, each commit reusing the same real-but-unrelated message `fix(download): enable steady tick on chunk bars for real-time updates` to disguise what changed (see [Technical findings](#technical-findings)) |
 | 2026-06-17T14:12:25Z - 14:12:55Z | The same four files removed within a 30-second window, this time through honestly-labeled `Remove <path>` commits |
+| 2026-07-20T20:42:00Z | First report filed with GitHub via the abuse form, with full technical evidence (Ticket ID `4587510`) |
 | 2026-07-21T08:43:06Z | This repository's clone-watch flags the account (issue #53) |
-| (undated, prior to today) | First report filed with GitHub via the abuse form; response received did not address the report |
+| 2026-07-21T11:50:00Z | GitHub Developer Support replies on Ticket `4587510` with a response about a Copilot access restriction - unrelated to the report filed (see [§D](#d-githubs-response-to-the-first-report)) |
 | 2026-08-22T03:03:47Z | Latest commit: `README.md` updated to point the download button directly at a packaged payload (see below) |
 
 ## Technical findings
@@ -162,6 +164,62 @@ being distributed today, byte-for-byte the same technique (disguised LuaJIT inte
 Lua payload), just repackaged into a single zip instead of four loose files. Combined with the
 `Lua/Agent.CQ` antivirus detection referenced in §A.1, this is consistent with an actively
 maintained Lua-based trojan, not a one-off or abandoned artifact.
+
+### C. Dynamic/behavioral analysis (instrumented LuaJIT harness)
+
+Performed 2026-08-22, in a network-isolated Docker container (`--network none`, `--cap-drop=ALL`,
+read-only rootfs, resource limits, `strace` second layer). Full detail, methodology, and IOCs are in
+[`../lua-trojan-defensive-analysis.md`](../lua-trojan-defensive-analysis.md); this is the summary.
+
+Because §B showed the obfuscation reconstructs strings only at runtime, the Lua source (`jsm.txt`)
+was executed inside a **stock LuaJIT interpreter with `ffi`/`os`/`io`/`require` replaced by
+instrumented fakes** that log every call and return fabricated answers, plus runtime **string
+harvesting** (wrapping `string.char`/`table.concat`/`ffi.string`/etc. to capture every string the
+obfuscator rebuilds). The original `minify.exe` was never run. Every run produced **zero** network
+syscalls at the OS level (verified via `strace`).
+
+**Observed behavior** (deterministic across runs; 48,216 telemetry events):
+
+1. `getfenv(nil)` — sandbox-escape probe (anti-analysis).
+2. `GetConsoleWindow()` + `ShowWindow(hwnd, SW_HIDE)` — hides the console window.
+3. `VirtualAlloc(NULL, 7, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE)` — allocates **RWX** memory.
+4. Resolves ~190 Win32 APIs **by hash** (PEB + export-table walking, no `GetProcAddress`).
+5. `LdrLoadDll`: `wininet.dll`, `shell32.dll`, `advapi32.dll`, `shlwapi.dll`, `winbrand.dll`.
+6. `CreateMutexW("h9yzxjiyo8oeqbqnnf91vnrynkkvzvxq7ce7tg5ca779mq2zww8qdccogaagypk74mz6m6jbthtlsvzojd8ixzbn7eir7")`.
+7. Connectivity canary: `InternetOpenUrl("https://www.microsoft.com")`.
+8. **Victim profiling:** `WinHttpConnect("ip-api.com", 80)` + `WinHttpOpenRequest("GET", "/json/")`
+   under a spoofed `Chrome/148.0.0.0` User-Agent.
+9. **Blockchain C2 (EtherHiding):** builds a JSON-RPC `eth_call` invoking `getData()` (selector
+   `0x3bc5de30`) on contract `0x1823A9a0Ec8e0C25dD957D0841e3D41a4474bAdc` — the real C2 address is
+   read from on-chain data (takedown-resistant dead-drop).
+10. **Persistence:** `schtasks /create /sc daily /st 13:19 /f` (daily scheduled task at 13:19).
+
+**Limitation:** the final decoded C2 destination was not observed. A stateful fake-network harness
+answered the `getData()` call with a decoy body; the payload **validated and rejected it**, then
+aborted cleanly — confirming the `eth_call` is the C2-resolution step and that it is guarded against
+generic fake responses (additional anti-analysis). The contract itself currently holds **no code on
+any major EVM chain** (`eth_getCode` returned 0 bytes on Ethereum, BSC, Polygon, Arbitrum, Optimism,
+Base, Avalanche, Gnosis, Sepolia), indicating a **pre-positioned dead-drop** the operator populates
+only when the campaign activates. The contract address, selector, mutex, profiling endpoint, and
+persistence command are hard IOCs regardless. Everything else in this section was observed verbatim.
+
+### D. GitHub's response to the first report
+
+The first report (2026-07-20T20:42:00Z, Ticket ID `4587510`) included the full technical evidence
+summarized in §A-B above: file hashes, VirusTotal results, the commit-history reconstruction, and
+GitHub-API precedence proof (`fork: false`, repo creation dates). It requested takedown of
+`Foremost-headsail607/gvm-rs` and suspension of the owning account.
+
+The reply, received 2026-07-21T11:50:00Z on the same ticket, did not reference the reported
+repository, the malware, or any of the submitted evidence. It stated that "access to Copilot was
+restricted due to excessive and/or automated usage, the use of multiple accounts to circumvent
+usage limits ..., usage through a proxy ..., or credential sharing," and asked for confirmation of
+agreement to GitHub's Terms of Service before Copilot access could be reviewed for reinstatement -
+a notice for an unrelated Copilot-access case, sent on the abuse-report ticket. No further response
+addressing the actual report was received on that ticket. This mismatch is the reason the
+2026-08-22 follow-up (see [`lua-trojan-defensive-analysis.md`](../lua-trojan-defensive-analysis.md)
+and the dynamic-analysis evidence in §C above) was filed as a new, independent report rather than a
+reply on the same thread.
 
 ## What this means for `gvm-rs` users
 

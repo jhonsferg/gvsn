@@ -32,7 +32,7 @@ Install, switch, and pin any Go release - no `sudo`, no system dependencies, no 
 ---
 
 > [!WARNING]
-> **Only get `gvm` from this repository's official [Releases page](https://github.com/jhonsferg/gvm-rs/releases) or the install commands below.** Clones of this repository exist that distribute unofficial binaries under the same name. See [SECURITY.md](SECURITY.md#malicious-forks--clones) for known cases, or the [full technical writeup](docs/security/incidents/2026-06-malicious-clone-foremost-headsail607.md) of one active malware-distributing clone.
+> **Only get `gvm` from this repository's official [Releases page](https://github.com/jhonsferg/gvm-rs/releases) or the install commands below.** Clones of this repository exist that distribute unofficial binaries under the same name. See [SECURITY.md](SECURITY.md#malicious-forks--clones) for known cases, the [plain-language walkthrough](docs/security/anatomy-of-a-malicious-clone.md) of how one clone's malware works, or the [full technical writeup](docs/security/incidents/2026-06-malicious-clone-foremost-headsail607.md) of the active malware-distributing clone.
 
 ---
 
@@ -374,7 +374,7 @@ gvm outdated
 
 ```
   Installed      Latest patch   Status
-  ──────────────────────────────────────────────────
+  ----------------------------------------------------
   go1.22.4       go1.22.4       ✓  up to date
   go1.21.6       go1.21.9       ⚠  3 patches behind
 ```
@@ -624,15 +624,15 @@ This login profile entry is what makes `go` visible to VSCode, GoLand, and other
 
 ```
 ~/.gvm/
-├── version          # active global version (plain text)
-├── current -> versions/go1.23.0/   # symlink/junction updated by gvm use
-├── versions/
-│   ├── go1.22.4/    # extracted Go toolchain
-│   │   ├── bin/
-│   │   ├── src/
-│   │   └── ...
-│   └── go1.23.0/
-└── tmp/             # download staging area (cleaned after install)
+|-- version          # active global version (plain text)
+|-- current -> versions/go1.23.0/   # symlink/junction updated by gvm use
+|-- versions/
+|   |-- go1.22.4/    # extracted Go toolchain
+|   |   |-- bin/
+|   |   |-- src/
+|   |   `-- ...
+|   `-- go1.23.0/
+`-- tmp/             # download staging area (cleaned after install)
 ```
 
 The `current` symlink (junction on Windows) always points to the active version. The login profile PATH entry points to `~/.gvm/current/bin`, which means GUI applications always see whichever version was last activated with `gvm use` - no shell restart required.
