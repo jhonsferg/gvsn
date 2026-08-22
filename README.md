@@ -31,6 +31,11 @@ Install, switch, and pin any Go release - no `sudo`, no system dependencies, no 
 
 ---
 
+> [!WARNING]
+> **Only get `gvm` from this repository's official [Releases page](https://github.com/jhonsferg/gvm-rs/releases) or the install commands below.** Clones of this repository exist that distribute unofficial binaries under the same name. See [SECURITY.md](SECURITY.md#malicious-forks--clones) for known cases, or the [full technical writeup](docs/security/incidents/2026-06-malicious-clone-foremost-headsail607.md) of one active malware-distributing clone.
+
+---
+
 ## ✨ What makes gvm different?
 
 gvm is a Go version manager built from scratch in Rust. It was designed with a single goal: work everywhere, require nothing.

@@ -140,3 +140,31 @@ project and its users, is any copy of this repository that:
 
 We do not control third-party accounts or repositories and cannot guarantee removal timelines,
 but every credible report will be investigated and escalated to GitHub Trust & Safety.
+
+### Known cases
+
+- **[`Foremost-headsail607/gvm-rs`](https://github.com/Foremost-headsail607/gvm-rs)** - flagged by
+  this repository's automated clone-watch (see
+  [issue #53](https://github.com/jhonsferg/gvm-rs/issues/53)). It reuses this project's name and
+  description, but does **not** distribute binaries through GitHub Releases like the real pipeline
+  does - its README links directly to an archive committed inside `src/`
+  (`gvm-rs-xiphisternal.zip`), bypassing this repository's build, checksum, and
+  [VirusTotal-scan](#antivirus--windows-defender-false-positives) process entirely. This was
+  reported through [GitHub's abuse form](https://github.com/contact/report-abuse); the response
+  received did not address the report. The clone was still active and receiving pushes as of
+  2026-08-22. Full technical writeup, including commit hashes, the recovered malware-loader
+  chain, and its correlation with a real antivirus detection:
+  [`docs/security/incidents/2026-06-malicious-clone-foremost-headsail607.md`](docs/security/incidents/2026-06-malicious-clone-foremost-headsail607.md).
+- If you installed `gvm` from anywhere other than the
+  [official releases](https://github.com/jhonsferg/gvm-rs/releases) or the install commands in the
+  [README](README.md#-installation), do not run it - verify what you downloaded, or reinstall from
+  a genuine source.
+
+### Disclaimer
+
+This project, its releases, and its published checksums are only what comes out of
+`jhonsferg/gvm-rs`'s own [`release.yml`](.github/workflows/release.yml) pipeline. We are not
+responsible for, and have no control over, binaries distributed by clones, forks, or third parties
+impersonating this project - including any that reuse this project's name, README, or commit
+history. If in doubt, always verify the SHA-256 checksum of anything named `gvm` against the
+`checksums.txt` published on the matching [release](https://github.com/jhonsferg/gvm-rs/releases).
