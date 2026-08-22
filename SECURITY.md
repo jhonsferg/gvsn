@@ -72,6 +72,37 @@ We will never ask you to disable OS protections to run `gvm` - see
 [Malicious forks / clones](#malicious-forks--clones) below for how to tell a genuine release from a
 compromised one.
 
+### For maintainers: enabling code signing (not done yet)
+
+Signing is the actual fix for the false positives above, not just a workaround - it removes the
+"unknown publisher" warning entirely and lets reputation accumulate on the publisher identity
+instead of resetting on every release's new file hash. `gvm-rs` qualifies for
+[SignPath Foundation](https://signpath.org/)'s free code signing for open-source projects (OSI
+license, public repo, actively maintained, already shipping releases - all already true here), but
+enrolling requires a few one-time manual steps outside this repository that only the project owner
+can do:
+
+1. Apply at [signpath.io/solutions/open-source-community](https://signpath.io/solutions/open-source-community)
+   (review and approval happen over email - not instant).
+2. Once approved, install the [SignPath GitHub App](https://github.com/apps/signpath) on this
+   repository, and in the SignPath dashboard configure a "Trusted Build System" for `GitHub.com`
+   with a project + signing policy for `gvm-rs`.
+3. From that dashboard, add these to the repository (`gh secret set` / `gh variable set`, or
+   Settings → Secrets and variables → Actions):
+   - `SIGNPATH_API_TOKEN` (**secret**) - a submitter-scoped API token.
+   - `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_SIGNING_POLICY_SLUG`
+     (repository **variables** - not secret, just identifiers).
+
+[`release.yml`](.github/workflows/release.yml) already has the signing step wired in behind these
+four values - it's a complete no-op today (Windows archives ship unsigned, same as every release so
+far) and activates automatically the moment they're all set, no further code changes needed.
+
+Separately: unsigned/low-reputation files can also be reported straight to Microsoft via the
+[WDSI submission portal](https://www.microsoft.com/en-us/wdsi/filesubmission), but that portal has
+no public API - it's a manual, sign-in-required, per-file web form, so it isn't (and can't be)
+wired into the release pipeline. Worth doing by hand after a release if false-positive reports come
+in, but signing is the fix that actually scales.
+
 ## Malicious forks / clones
 
 This project is MIT-licensed: forking, modifying, and redistributing it is welcome and expected.

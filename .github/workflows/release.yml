@@ -197,11 +197,56 @@ jobs:
           tar czf "${{ matrix.artifact_archive }}" gvm
           rm gvm
 
-      - name: Package archive (zip - Windows)
+      - name: Stage binary (zip - Windows)
+        if: matrix.archive_type == 'zip'
+        shell: pwsh
+        run: Copy-Item "target\${{ matrix.target }}\release\${{ matrix.binary_name }}" gvm.exe
+
+      # ── Code signing (optional, needs SignPath configured) ────────────────────
+      #
+      # Authenticode-signs gvm.exe via SignPath (https://signpath.io) before
+      # it's zipped up, so shipped Windows binaries carry a real publisher
+      # signature instead of triggering "unknown publisher" SmartScreen/
+      # Defender warnings. Entirely skipped (archives ship unsigned, same as
+      # every release so far) until SIGNPATH_API_TOKEN and the three
+      # `vars.SIGNPATH_*` below are configured - see SECURITY.md for the
+      # one-time SignPath application and project setup this requires.
+      #
+      # NOTE: output-artifact-directory/skip-decompress behavior could only
+      # be verified against SignPath's action.yml, not against a real
+      # signing response (no SignPath project exists yet to test against).
+      # Watch the first real signed release closely and adjust the
+      # "signed\gvm.exe" path below if SignPath returns a different layout.
+      - name: Upload unsigned binary for signing
+        if: matrix.archive_type == 'zip' && secrets.SIGNPATH_API_TOKEN != ''
+        id: unsigned-artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: unsigned-${{ matrix.artifact_archive }}
+          path: gvm.exe
+          retention-days: 1
+
+      - name: Sign gvm.exe with SignPath
+        if: matrix.archive_type == 'zip' && secrets.SIGNPATH_API_TOKEN != ''
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2.3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.unsigned-artifact.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: Replace with the signed binary
+        if: matrix.archive_type == 'zip' && secrets.SIGNPATH_API_TOKEN != ''
+        shell: pwsh
+        run: Copy-Item "signed\gvm.exe" gvm.exe -Force
+
+      - name: Compress archive (zip - Windows)
         if: matrix.archive_type == 'zip'
         shell: pwsh
         run: |
-          Copy-Item "target\${{ matrix.target }}\release\${{ matrix.binary_name }}" gvm.exe
           Compress-Archive -Path gvm.exe `
                            -DestinationPath "${{ matrix.artifact_archive }}" `
                            -Force
