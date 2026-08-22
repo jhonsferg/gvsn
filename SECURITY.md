@@ -72,30 +72,34 @@ We will never ask you to disable OS protections to run `gvm` - see
 [Malicious forks / clones](#malicious-forks--clones) below for how to tell a genuine release from a
 compromised one.
 
-### For maintainers: enabling code signing (not done yet)
+### For maintainers: enabling code signing (pending - applied to OSSign)
 
 Signing is the actual fix for the false positives above, not just a workaround - it removes the
 "unknown publisher" warning entirely and lets reputation accumulate on the publisher identity
-instead of resetting on every release's new file hash. `gvm-rs` qualifies for
-[SignPath Foundation](https://signpath.org/)'s free code signing for open-source projects (OSI
-license, public repo, actively maintained, already shipping releases - all already true here), but
-enrolling requires a few one-time manual steps outside this repository that only the project owner
-can do:
+instead of resetting on every release's new file hash. Free options for OSS projects were surveyed
+in August 2026:
 
-1. Apply at [signpath.io/solutions/open-source-community](https://signpath.io/solutions/open-source-community)
-   (review and approval happen over email - not instant).
-2. Once approved, install the [SignPath GitHub App](https://github.com/apps/signpath) on this
-   repository, and in the SignPath dashboard configure a "Trusted Build System" for `GitHub.com`
-   with a project + signing policy for `gvm-rs`.
-3. From that dashboard, add these to the repository (`gh secret set` / `gh variable set`, or
-   Settings → Secrets and variables → Actions):
-   - `SIGNPATH_API_TOKEN` (**secret**) - a submitter-scoped API token.
-   - `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_SIGNING_POLICY_SLUG`
-     (repository **variables** - not secret, just identifiers).
+- **[SignPath Foundation](https://signpath.org/)**: no longer viable - what used to be a
+  straightforward free program now funnels through SignPath's commercial product, which only
+  offers a paid trial.
+- **[Certum](https://www.certum.eu/en/code-signing-certificates/)**: discontinued its free
+  open-source code-signing program back in 2016; only paid certificates remain.
+- **[OSSign](https://ossign.org/)**: still genuinely free for qualifying OSS projects (OSI
+  license, public source, actively maintained - `gvm-rs` meets all of it), and integrates via a
+  [GitHub Action](https://github.com/OSSign/actions) that dispatches a signing request and waits
+  for the signed artifact. **Chosen path**, but as of 2026-08-22 OSSign has applications
+  **suspended due to a backlog** - there's no live form to submit right now. Check
+  [ossign.org](https://ossign.org/) periodically, or email `contact@ossign.org`, to find out when
+  applications reopen.
 
-[`release.yml`](.github/workflows/release.yml) already has the signing step wired in behind these
-four values - it's a complete no-op today (Windows archives ship unsigned, same as every release so
-far) and activates automatically the moment they're all set, no further code changes needed.
+Once approved, OSSign provisions per-project credentials (a username + token) and a dedicated
+signing repository - the exact wiring into
+[`release.yml`](.github/workflows/release.yml) depends on details only available at that point
+(their action needs the job to poll or use a GitHub Environment wait-timer while the signing
+request is manually approved on their end), so it hasn't been pre-wired the way the VirusTotal step
+below was - doing so now would mean guessing at values, exactly the kind of thing that broke this
+workflow file once already (see the fix in `fix(ci): route secrets through env before use in if:
+conditionals`). Wire it in as a follow-up once OSSign approval and credentials arrive.
 
 Separately: unsigned/low-reputation files can also be reported straight to Microsoft via the
 [WDSI submission portal](https://www.microsoft.com/en-us/wdsi/filesubmission), but that portal has
