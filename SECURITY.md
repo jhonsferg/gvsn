@@ -34,6 +34,44 @@ within **7 days** for critical issues.
 - Social engineering or phishing
 - Vulnerabilities in systems that `gvm` does not control (e.g. go.dev infrastructure)
 
+## Antivirus / Windows Defender false positives
+
+`gvm` binaries are not code-signed yet, which makes them more likely to trigger antivirus and
+SmartScreen warnings than signed software - this is a **false positive**, not an indication that a
+release is compromised. A few things about `gvm` specifically make this more likely:
+
+- **Low file reputation**: every release produces a binary with a new hash, so cloud-based
+  reputation systems (Windows Defender SmartScreen, and similarly in third-party AV) see it as
+  "never seen before" on every version bump.
+- **Self-replacing update**: `gvm upgrade` downloads a new binary and replaces the currently
+  running executable in place. This is the same category of behavior some heuristic engines
+  associate with malware droppers/updaters, even though it's implemented via the same
+  atomic-rename pattern used by mainstream tools like `rustup`, `scoop`, and `nvm-windows` (which
+  hit this same false-positive class from time to time too).
+- **`irm | iex` / `curl | sh` installers**: the one-line install pattern is standard across the
+  ecosystem (Rust, Homebrew, nvm, ...) but is also exactly what "download and execute" heuristics
+  watch for in PowerShell.
+
+### If your antivirus or Windows Defender flags `gvm`
+
+1. **Verify the download is genuine** before doing anything else: compare its SHA-256 against the
+   `checksums.txt` published on the [same release](https://github.com/jhonsferg/gvm-rs/releases).
+   `install.ps1`/`install.sh` and `uninstall.ps1`/`uninstall.sh` already do this automatically, and
+   releases with a `VIRUSTOTAL_API_KEY` configured also link a multi-engine VirusTotal scan for
+   every archive directly in the release notes.
+2. Add an exclusion for the `gvm` binary/install directory in your AV product, or restore it from
+   quarantine, once you've verified the checksum.
+3. Please also report the false positive to your AV vendor (most have a submission form, e.g.
+   [Microsoft's for Defender/SmartScreen](https://www.microsoft.com/en-us/wdsi/filesubmission)) -
+   this helps them correct it for every other `gvm` user, not just you.
+4. If you'd rather not deal with any of this, [open an issue](https://github.com/jhonsferg/gvm-rs/issues)
+   with your AV product's name and the exact detection name/ID it reported - it helps us track
+   which engines flag `gvm` and prioritize getting it code-signed and submitted for allow-listing.
+
+We will never ask you to disable OS protections to run `gvm` - see
+[Malicious forks / clones](#malicious-forks--clones) below for how to tell a genuine release from a
+compromised one.
+
 ## Malicious forks / clones
 
 This project is MIT-licensed: forking, modifying, and redistributing it is welcome and expected.

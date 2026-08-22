@@ -692,6 +692,8 @@ This project's real binaries are always built by the [`release.yml` GitHub Actio
 
 If you find a copy of this project distributing something other than the source in this repository (especially compiled binaries not produced by our CI), please report it - see [SECURITY.md](SECURITY.md#malicious-forks--clones).
 
+> 🛡️ If your antivirus or Windows Defender flags a *genuine* release from this repository, that's a false positive, not a compromised download - see [SECURITY.md](SECURITY.md#antivirus--windows-defender-false-positives) for why this happens and what to do.
+
 ---
 
 ## 📄 License

@@ -393,6 +393,25 @@ jobs:
 
           echo "Release ${TAG} published with all assets"
 
+      # ── VirusTotal scan (optional, needs a VIRUSTOTAL_API_KEY secret) ─────────
+      #
+      # Public transparency and a paper trail for antivirus/SmartScreen false
+      # positives: submits every release archive to VirusTotal and appends the
+      # per-file analysis link to the release notes. Skipped entirely (no
+      # failure, no step even runs) when the secret isn't configured - e.g. on
+      # forks. Get a free API key at https://www.virustotal.com/gui/join-us
+      # and add it as the VIRUSTOTAL_API_KEY repository secret to enable this.
+      # request_rate matches the public API's free-tier limit (4/minute).
+      - name: Scan release archives with VirusTotal
+        if: ${{ secrets.VIRUSTOTAL_API_KEY != '' }}
+        uses: crazy-max/ghaction-virustotal@936d8c5c00afe97d3d9a1af26d017cfdf26800a2 # v5.0.0
+        with:
+          vt_api_key: ${{ secrets.VIRUSTOTAL_API_KEY }}
+          update_release_body: true
+          request_rate: 4
+          files: |
+            dist/gvm_*
+
       # ── Workflow job summary ───────────────────────────────────────────────────
 
       - name: Job summary
@@ -416,6 +435,14 @@ jobs:
             echo "\`\`\`"
             cat dist/checksums.txt
             echo "\`\`\`"
+            echo ""
+            if [ -n "${{ secrets.VIRUSTOTAL_API_KEY }}" ]; then
+              echo "### VirusTotal"
+              echo "Per-file scan links were appended to the [release notes](https://github.com/${{ github.repository }}/releases/tag/${TAG})."
+            else
+              echo "### VirusTotal"
+              echo "Skipped - no \`VIRUSTOTAL_API_KEY\` repository secret configured."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   # ── Publish to crates.io ──────────────────────────────────────────────────────
