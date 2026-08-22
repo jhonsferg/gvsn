@@ -7,13 +7,13 @@
 //! 3. Every gvm-managed line from the detected shell's profile file.
 //!
 //! A summary of what will be deleted is always printed before any action is
-//! taken. When `--force` is omitted the user must type `yes` to confirm.
+//! taken. When `--force` is omitted the user must confirm with `y`/`yes`.
 
 use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use std::path::Path;
 
-use crate::{config::Config, lock, shell};
+use crate::{config::Config, lock, prompt, shell};
 
 /// Completely removes gvm and all associated data from the system.
 ///
@@ -61,12 +61,8 @@ pub fn run(config: &Config, force: bool) -> Result<()> {
 
     // ── Confirm ───────────────────────────────────────────────────────────────
     if !force {
-        eprint!("  Type {} to confirm: ", "yes".bold());
-        let mut input = String::new();
-        std::io::stdin()
-            .read_line(&mut input)
-            .context("Failed to read confirmation")?;
-        if input.trim() != "yes" {
+        let message = format!("  Type {} to confirm: ", "yes".bold());
+        if !prompt::confirm(&message)? {
             bail!("Aborted.");
         }
         println!();

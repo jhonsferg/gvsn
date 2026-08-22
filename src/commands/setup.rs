@@ -190,6 +190,24 @@ fn strip_all(sh: &dyn ShellConfig) -> Result<()> {
 
 // --- Windows registry --------------------------------------------------------
 
+/// Returns `true` if `candidate` is already present in `entries`.
+///
+/// Windows paths are case-insensitive, so a PATH entry that differs from
+/// `candidate` only in case (e.g. a different drive-letter casing from
+/// another shell) still counts as present - comparing `Path` values directly
+/// would miss this and insert a duplicate entry on every `gvm setup` run.
+///
+/// Kept unconditional (not `#[cfg(windows)]`) so its logic is unit-tested on
+/// every platform; its only production caller, `inject_windows_registry`, is
+/// Windows-only, so the lint is suppressed on other platforms instead.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn path_already_present(entries: &[String], candidate: &std::path::Path) -> bool {
+    let candidate = candidate.to_string_lossy();
+    entries
+        .iter()
+        .any(|e| e.eq_ignore_ascii_case(candidate.as_ref()))
+}
+
 /// Adds the gvm binary directory and `~\.gvm\current\bin` to the user PATH
 /// in the Windows registry (HKCU\Environment).
 ///
@@ -218,7 +236,7 @@ fn inject_windows_registry() -> Result<()> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             let dir_str = dir.to_string_lossy().to_string();
-            if !entries.iter().any(|e| std::path::Path::new(e) == dir) {
+            if !path_already_present(&entries, dir) {
                 entries.insert(0, dir_str);
                 println!("  Added {} to user PATH (registry)", dir.display());
                 changed = true;
@@ -232,10 +250,7 @@ fn inject_windows_registry() -> Result<()> {
     if let Some(home) = dirs::home_dir() {
         let current_bin = home.join(".gvm").join("current").join("bin");
         let current_bin_str = current_bin.to_string_lossy().to_string();
-        if !entries
-            .iter()
-            .any(|e| std::path::Path::new(e) == current_bin)
-        {
+        if !path_already_present(&entries, &current_bin) {
             entries.insert(0, current_bin_str);
             println!("  Added {} to user PATH (registry)", current_bin.display());
             changed = true;
@@ -301,6 +316,20 @@ mod tests {
     use super::*;
     #[cfg(not(target_os = "windows"))]
     use std::path::PathBuf;
+
+    #[test]
+    fn path_already_present_matches_case_insensitively() {
+        let entries = vec![r"C:\Users\jhon\.gvm\current\bin".to_string()];
+        let candidate = std::path::Path::new(r"c:\users\jhon\.gvm\current\bin");
+        assert!(path_already_present(&entries, candidate));
+    }
+
+    #[test]
+    fn path_already_present_is_false_for_unrelated_entry() {
+        let entries = vec![r"C:\Users\jhon\.cargo\bin".to_string()];
+        let candidate = std::path::Path::new(r"C:\Users\jhon\.gvm\current\bin");
+        assert!(!path_already_present(&entries, candidate));
+    }
 
     #[test]
     fn hint_for_missing_explicit_shell_lists_available() {

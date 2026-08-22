@@ -37,7 +37,7 @@ gvm is a Go version manager built from scratch in Rust. It was designed with a s
 
 - **No Go required** - you don't need Go installed to install Go. gvm downloads the official toolchain directly from go.dev.
 - **No `sudo`, no root** - everything lives under `~/.gvm` in your home directory.
-- **Zero system dependencies** - a single static binary is all you need.
+- **Zero system dependencies** - a single static binary is all you need on Windows, Linux (x86_64/ARM64/ARMv7/386), and macOS. The additional Linux server architectures (RISC-V, IBM Z, IBM POWER) link against the system's glibc instead, since Rust has no stable static (musl) target for them yet - glibc ships with essentially every Linux distribution and is backward-compatible, so this rarely matters in practice.
 - **Truly cross-platform** - one codebase, one behavior across Windows, Linux, and macOS on both x86_64 and ARM64.
 - **SHA-256 verified downloads** - every archive is checked against go.dev's official checksum before extraction.
 - **Fast, resumable downloads** - a single stream with a large read buffer to use as much of the link's throughput as possible. Interrupted downloads resume automatically from the last byte.
@@ -56,10 +56,13 @@ gvm is a Go version manager built from scratch in Rust. It was designed with a s
 - 🔨 **Build from source** - compile any Go version from the official source tarball with automatic bootstrap detection and real-time streaming output
 - 🌍 **Global default** - set a system-wide version with `gvm use`
 - 📌 **Per-project pinning** - drop a `.go-version` file; gvm activates it automatically
+- 🐚 **Session-scoped activation** - `gvm shell <version>` switches versions for the current terminal only, no files written
 - 🔐 **SHA-256 verification** - every download is checked against go.dev's official checksum
 - 🐚 **Shell integration** - automatic `PATH` and `GOROOT` injection for PowerShell, Bash, Zsh, and Fish
 - ⚡ **`gvm exec`** - run a command with any Go version without changing the global default
 - 🩺 **`gvm doctor`** - diagnose your setup with actionable hints
+- 📈 **`gvm outdated`** - check installed versions against go.dev for newer patch releases
+- 🧹 **`gvm prune`** - remove installed versions no longer referenced by any project
 - 🔄 **`gvm upgrade`** - self-update to the latest release from GitHub
 - 💣 **`gvm implode`** - completely remove gvm and all installed versions cleanly
 - 🏁 **Shell completions** - Bash, Zsh, Fish, and PowerShell
@@ -75,7 +78,7 @@ gvm is a Go version manager built from scratch in Rust. It was designed with a s
 irm https://raw.githubusercontent.com/jhonsferg/gvm-rs/main/install/install.ps1 | iex
 ```
 
-> Installs `gvm.exe` to `~\.local\bin`, then automatically runs `gvm setup` which adds the binary directory and `~\.gvm\current\bin` to your user `PATH` via the Windows registry, and injects the shell hook into your PowerShell profile.
+> Installs `gvm.exe` to `~\.local\bin`, then automatically runs `gvm setup` which adds the binary directory and `~\.gvm\current\bin` to your user `PATH` via the Windows registry, and injects the shell hook into your PowerShell profile. The archive's checksum is verified against `checksums.txt` before extraction. The binary statically links the Windows C runtime, so it never depends on the Visual C++ Redistributable being installed.
 
 ### 🐧 Linux and 🍎 macOS
 
@@ -83,7 +86,7 @@ irm https://raw.githubusercontent.com/jhonsferg/gvm-rs/main/install/install.ps1 
 curl -fsSL https://raw.githubusercontent.com/jhonsferg/gvm-rs/main/install/install.sh | sh
 ```
 
-> Installs `gvm` to `~/.local/bin`, then automatically runs `gvm setup` which injects the `gvm env` hook into your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) and adds a static `~/.gvm/current/bin` PATH entry to your login profile (`~/.profile` or `~/.zprofile`) so that GUI applications like VSCode and GoLand can find Go without needing an interactive shell.
+> Installs `gvm` to `~/.local/bin`, then automatically runs `gvm setup` which injects the `gvm env` hook into your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) and adds a static `~/.gvm/current/bin` PATH entry to your login profile (`~/.profile` or `~/.zprofile`) so that GUI applications like VSCode and GoLand can find Go without needing an interactive shell. The archive's checksum is verified against `checksums.txt` before extraction.
 
 ### 📂 Custom install directory
 
@@ -102,6 +105,34 @@ GVM_INSTALL_DIR=~/.bin curl -fsSL .../install.sh | sh
 ```sh
 gvm doctor
 ```
+
+---
+
+## 🗑️ Uninstallation
+
+Two equivalent ways to remove gvm completely - all installed Go versions, the `~/.gvm` data directory, the binary, and every gvm-managed line in your shell profile(s) / Windows PATH registry:
+
+**Option 1 - `gvm implode`** (if the binary still works):
+
+```sh
+gvm implode
+```
+
+**Option 2 - standalone uninstaller script** (works even if the binary is broken or already gone, and cleans *every* supported shell's profile, not just the one currently detected):
+
+```powershell
+# 🪟 Windows
+irm https://raw.githubusercontent.com/jhonsferg/gvm-rs/main/install/uninstall.ps1 | iex
+```
+
+```sh
+# 🐧 Linux / 🍎 macOS
+curl -fsSL https://raw.githubusercontent.com/jhonsferg/gvm-rs/main/install/uninstall.sh | sh
+```
+
+Both scripts show exactly what will be removed and ask for confirmation first. Add `--dry-run` to preview with nothing deleted, or `--force` to skip the prompt (a piped POSIX shell script can't prompt interactively, so use `GVM_UNINSTALL_FORCE=1` / `GVM_UNINSTALL_DRY_RUN=1` before the `curl` one-liner, or `curl ... | sh -s -- --force` to pass the flag through). They also sweep leftover temp files from an install/upgrade that was interrupted mid-way.
+
+> 💡 Anything you customised at install time (`GVM_DIR`, `GVM_INSTALL_DIR`) should be set the same way before uninstalling, so the script cleans the right locations.
 
 ---
 
@@ -219,6 +250,20 @@ Building Go from source takes **5-15 minutes** and requires approximately **3 GB
 
 ---
 
+### 🎯 Choosing how to activate a version
+
+gvm offers four ways to switch versions, each with a different scope:
+
+| Command | Scope | Persisted where |
+| ------- | ----- | ---------------- |
+| `gvm use` / `gvm default` | Every shell, system-wide | `~/.gvm/version` |
+| `gvm local` | This project (and anyone who clones it) | `.go-version` file in the project |
+| `gvm shell` | This terminal session only | Not persisted - lives only in the shell's environment |
+
+Resolution order when a new shell starts (or the shell hook re-checks): a `gvm shell` session override wins if set, otherwise `.go-version` (walking up from the current directory) wins if found, otherwise the global default from `gvm use` applies.
+
+---
+
 ### 🌍 `gvm use <version>` · `gvm default <version>`
 
 Sets the global default Go version. The version must already be installed.
@@ -246,14 +291,45 @@ gvm local 1.21.9
 
 > ⚠️ If the pinned version is not installed, gvm prints a warning and falls back to the global default.
 
+> 🆕 `gvm local latest` writes the literal string `latest` to `.go-version` instead of resolving it to a specific version. This means the pin **tracks the current stable release over time** rather than freezing on whatever was newest when you ran the command - different from `gvm local 1.22` or `gvm local 1.22.4`, which always pin an exact, unchanging version.
+
 ---
 
-### 🗑️ `gvm uninstall <version>`
+### 🐚 `gvm shell [version] [--unset]`
 
-Removes an installed Go version from disk.
+Activates a Go version for the **current terminal session only** - no files are written, nothing is persisted. Closing the terminal (or running `--unset`) reverts to whatever `.go-version` or the global default says.
+
+```sh
+gvm shell 1.21        # 🎯 activate 1.21 for this session only
+gvm shell --unset     # ↩️  revert to the file-based version
+```
+
+> Requires the shell wrapper injected by `gvm setup` to take effect immediately in the current shell. Without it, run `eval "$(gvm shell 1.21)"` manually.
+
+---
+
+### 🗑️ `gvm uninstall <version> [--force]`
+
+Removes an installed Go version from disk. Refuses to remove the currently active version. Asks for confirmation unless `--force` is passed.
 
 ```sh
 gvm uninstall 1.21.9
+gvm uninstall 1.21.9 --force   # 🔇 skip the confirmation prompt
+```
+
+---
+
+### 🧹 `gvm prune [--force] [--dry-run] [--scan-dir <path>]`
+
+Removes installed Go versions that are **no longer referenced** by anything gvm knows about, freeing disk space without you having to track down stale toolchains by hand.
+
+A version counts as referenced when it matches the global default, or appears in a `.go-version` file found by walking up from the current directory (or found while scanning `--scan-dir`, up to 5 levels deep). Everything else is offered for removal.
+
+```sh
+gvm prune                       # 🔍 shows what would be removed, asks for confirmation
+gvm prune --dry-run             # 👀 preview only, nothing is deleted
+gvm prune --force                # 🔇 skip the confirmation prompt
+gvm prune --scan-dir ~/projects  # 📂 also check .go-version files under this directory
 ```
 
 ---
@@ -280,6 +356,23 @@ gvm list-remote --all    # 📜 every patch release
 ```
 
 Already-installed versions are marked with `✓`.
+
+---
+
+### 📈 `gvm outdated`
+
+Checks every installed Go version against go.dev and reports whether a newer patch release exists for the same major.minor line.
+
+```sh
+gvm outdated
+```
+
+```
+  Installed      Latest patch   Status
+  ──────────────────────────────────────────────────
+  go1.22.4       go1.22.4       ✓  up to date
+  go1.21.6       go1.21.9       ⚠  3 patches behind
+```
 
 ---
 
@@ -429,6 +522,8 @@ What gets removed:
 
 > ⚠️ This operation is **irreversible**. Your installed Go versions will be deleted. Use `gvm upgrade` instead if you just want to update.
 
+> 🩹 If the `gvm` binary is broken or already gone, use the standalone uninstaller script instead (see **Uninstallation** near the top of this README) - it does not depend on `gvm` itself.
+
 ---
 
 ### 🏁 `gvm completions <shell>`
@@ -559,13 +654,20 @@ The binary is placed at `target/release/gvm` (or `gvm.exe` on Windows).
 
 Releases are automated via GitHub Actions. Pushing a version tag triggers cross-compilation for all supported targets:
 
-| Artifact                 | Target                       | Notes            |
-| ------------------------ | ---------------------------- | ---------------- |
-| `gvm-windows-x86_64.exe` | `x86_64-pc-windows-msvc`     |                  |
-| `gvm-linux-x86_64`       | `x86_64-unknown-linux-musl`  | ⚡ static binary |
-| `gvm-linux-aarch64`      | `aarch64-unknown-linux-musl` | ⚡ static binary |
-| `gvm-darwin-x86_64`      | `x86_64-apple-darwin`        |                  |
-| `gvm-darwin-aarch64`     | `aarch64-apple-darwin`       | 🍎 Apple Silicon |
+| Artifact                     | Target                          | Notes                      |
+| ---------------------------- | -------------------------------- | --------------------------- |
+| `gvm_windows_x86_64.zip`     | `x86_64-pc-windows-msvc`         | ⚡ static binary (CRT)      |
+| `gvm_windows_arm64.zip`      | `aarch64-pc-windows-msvc`        | ⚡ static binary (CRT)      |
+| `gvm_linux_x86_64.tar.gz`    | `x86_64-unknown-linux-musl`      | ⚡ static binary            |
+| `gvm_linux_aarch64.tar.gz`   | `aarch64-unknown-linux-musl`     | ⚡ static binary            |
+| `gvm_linux_armv7.tar.gz`     | `armv7-unknown-linux-musleabihf` | ⚡ static binary            |
+| `gvm_linux_386.tar.gz`       | `i686-unknown-linux-musl`        | ⚡ static binary            |
+| `gvm_linux_riscv64.tar.gz`   | `riscv64gc-unknown-linux-gnu`    | links system glibc (no musl target) |
+| `gvm_linux_s390x.tar.gz`     | `s390x-unknown-linux-gnu`        | IBM Z - links system glibc  |
+| `gvm_linux_ppc64le.tar.gz`   | `powerpc64le-unknown-linux-gnu`  | IBM POWER LE - links system glibc |
+| `gvm_android_aarch64.tar.gz` | `aarch64-linux-android`          | 🤖 Termux, links bionic     |
+| `gvm_darwin_x86_64.tar.gz`   | `x86_64-apple-darwin`            | links libSystem (normal on macOS) |
+| `gvm_darwin_aarch64.tar.gz`  | `aarch64-apple-darwin`           | 🍎 Apple Silicon, links libSystem |
 
 Each release also includes `checksums.txt` with SHA-256 hashes for all artifacts, plus SBOM files in CycloneDX and SPDX formats.
 

@@ -14,6 +14,7 @@ mod fs;
 mod http;
 mod lock;
 mod profile;
+mod prompt;
 mod remote;
 mod shell;
 mod tempdir;

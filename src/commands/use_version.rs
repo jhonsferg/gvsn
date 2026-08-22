@@ -23,8 +23,7 @@ pub fn run(config: &Config, spec_str: &str) -> Result<()> {
     let spec = VersionSpec::parse(spec_str)?;
     let version = toolchain::resolve_installed(config, &spec)?;
 
-    toolchain::set_global_version(config, &version)?;
-    toolchain::update_current_link(config, &version)?;
+    toolchain::set_active_version(config, &version)?;
 
     println!(
         "{} Now using Go {} (global).",

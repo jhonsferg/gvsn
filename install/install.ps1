@@ -14,6 +14,20 @@
 
 $ErrorActionPreference = "Stop"
 
+# Older PowerShell 5.1 / .NET Framework hosts default to TLS 1.0/1.1, which
+# GitHub rejects outright - that shows up as a confusing generic connection
+# error with no mention of TLS. Force 1.2 (and 1.3 where the host knows it)
+# up front so failures further down are real failures, not a protocol
+# mismatch.
+try {
+    [Net.ServicePointManager]::SecurityProtocol = `
+        [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+} catch {}
+try {
+    [Net.ServicePointManager]::SecurityProtocol = `
+        [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls13
+} catch {}
+
 $REPO        = "jhonsferg/gvm-rs"
 $InstallDir  = if ($env:GVM_INSTALL_DIR)    { $env:GVM_INSTALL_DIR }    else { "$env:USERPROFILE\.local\bin" }
 $Version     = if ($env:GVM_VERSION)        { $env:GVM_VERSION }        else { "latest" }
@@ -28,13 +42,47 @@ function Abort([string]$msg) {
     exit 1
 }
 
+# Extracts the HTTP status code from a web-request error, if any. Works
+# across both the WebException thrown by Windows PowerShell 5.1 and the
+# HttpResponseException thrown by PowerShell 7+.
+function Get-HttpStatusCode($ErrorRecord) {
+    try {
+        if ($ErrorRecord.Exception.Response) {
+            return [int]$ErrorRecord.Exception.Response.StatusCode
+        }
+    }
+    catch {}
+    return $null
+}
+
+# Downloads $Uri to $OutFile, retrying transient failures with a short
+# exponential back-off instead of aborting on the first hiccup.
+function Invoke-DownloadWithRetry([string]$Uri, [string]$OutFile, [int]$Retries = 3, [int]$TimeoutSec = 300) {
+    $attempt = 0
+    while ($true) {
+        try {
+            $ProgressPreference = "SilentlyContinue"
+            Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing -TimeoutSec $TimeoutSec
+            return
+        }
+        catch {
+            $attempt++
+            if ($attempt -gt $Retries) { throw }
+            Write-Step "Download failed, retrying ($attempt/$Retries)..."
+            Start-Sleep -Seconds ([Math]::Pow(2, $attempt))
+        }
+    }
+}
+
 Write-Host ""
 Write-Host "  gvm" -ForegroundColor Cyan -NoNewline
 Write-Host " -- Go Version Manager installer" -ForegroundColor White
 Write-Host ""
 
 # -- 1. Detect architecture ----------------------------------------------------
-$isArm = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture `
+# OSArchitecture (not ProcessArchitecture) so this reports the real hardware
+# even when PowerShell itself is running under x64 emulation on Windows ARM64.
+$isArm = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture `
          -eq [System.Runtime.InteropServices.Architecture]::Arm64
 
 $Arch = if ($isArm) { "arm64" } else { "x86_64" }
@@ -49,34 +97,72 @@ Write-Step "Detected platform: windows-$Arch"
 if ($Version -eq "latest") {
     Write-Step "Fetching latest release from $ApiBase..."
     try {
-        $rel     = Invoke-RestMethod "$ApiBase/repos/$REPO/releases/latest"
+        $rel     = Invoke-RestMethod "$ApiBase/repos/$REPO/releases/latest" -TimeoutSec 30
         $Version = $rel.tag_name
     }
     catch {
-        Abort "Could not fetch latest version: $_"
+        $status = Get-HttpStatusCode $_
+        if ($status -eq 403) {
+            Abort "GitHub API rate limit exceeded (HTTP 403). Try again later, or set `$env:GVM_VERSION explicitly."
+        }
+        elseif ($status) {
+            Abort "Could not fetch latest version (HTTP $status): $_"
+        }
+        else {
+            Abort "Could not fetch latest version: $_"
+        }
     }
 }
 
 Write-Step "Installing gvm $Version"
 
 # -- 3. Download archive -------------------------------------------------------
-$ArchiveName = "gvm_windows_$Arch.zip"
-$DownloadUrl = "$DlBase/$REPO/releases/download/$Version/$ArchiveName"
-$TmpZip      = [System.IO.Path]::Combine(
-                   [System.IO.Path]::GetTempPath(),
-                   "gvm-install-$([System.Guid]::NewGuid()).zip"
-               )
+$ArchiveName   = "gvm_windows_$Arch.zip"
+$DownloadUrl   = "$DlBase/$REPO/releases/download/$Version/$ArchiveName"
+$ChecksumsUrl  = "$DlBase/$REPO/releases/download/$Version/checksums.txt"
+$TmpZip        = [System.IO.Path]::Combine(
+                     [System.IO.Path]::GetTempPath(),
+                     "gvm-install-$([System.Guid]::NewGuid()).zip"
+                 )
+$TmpChecksums  = [System.IO.Path]::Combine(
+                     [System.IO.Path]::GetTempPath(),
+                     "gvm-install-$([System.Guid]::NewGuid()).checksums.txt"
+                 )
 
 Write-Step "Downloading $ArchiveName from $DownloadUrl..."
 
 try {
-    $ProgressPreference = "SilentlyContinue"
-    Invoke-WebRequest -Uri $DownloadUrl -OutFile $TmpZip -UseBasicParsing
+    Invoke-DownloadWithRetry -Uri $DownloadUrl -OutFile $TmpZip
 }
 catch {
     if (Test-Path $TmpZip) { Remove-Item -Force $TmpZip }
     Abort "Download failed.`n  URL: $DownloadUrl`n  Error: $_"
 }
+
+Write-Step "Verifying checksum..."
+
+try {
+    Invoke-DownloadWithRetry -Uri $ChecksumsUrl -OutFile $TmpChecksums -TimeoutSec 30
+}
+catch {
+    Remove-Item -Force $TmpZip, $TmpChecksums -ErrorAction SilentlyContinue
+    Abort "Failed to download checksums.txt for verification.`n  URL: $ChecksumsUrl`n  Error: $_"
+}
+
+$expectedLine = Select-String -Path $TmpChecksums -Pattern "\s$([regex]::Escape($ArchiveName))$"
+if (-not $expectedLine) {
+    Remove-Item -Force $TmpZip, $TmpChecksums -ErrorAction SilentlyContinue
+    Abort "No checksum entry found for $ArchiveName in checksums.txt"
+}
+$expectedSha = ($expectedLine.Line -split '\s+')[0].ToLowerInvariant()
+$actualSha   = (Get-FileHash -Path $TmpZip -Algorithm SHA256).Hash.ToLowerInvariant()
+
+if ($expectedSha -ne $actualSha) {
+    Remove-Item -Force $TmpZip, $TmpChecksums -ErrorAction SilentlyContinue
+    Abort "Checksum mismatch for $ArchiveName!`n  expected: $expectedSha`n  got:      $actualSha"
+}
+Remove-Item -Force $TmpChecksums -ErrorAction SilentlyContinue
+Write-Ok "Checksum verified"
 
 # -- 4. Extract and install binary ---------------------------------------------
 if (-not (Test-Path $InstallDir)) {

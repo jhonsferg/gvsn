@@ -31,7 +31,7 @@ it is a typo fix, a new idea, a bug report, or a full feature implementation.
 
 ```sh
 git clone https://github.com/jhonsferg/gvm-rs.git
-cd gvm
+cd gvm-rs
 cargo build
 cargo test
 ```
@@ -72,7 +72,9 @@ CI enforces all three. A pull request that breaks any of them will not be merged
 1. Create `src/commands/<name>.rs` with a `pub fn run(config: &Config, ...) -> Result<()>`.
 2. Add `pub mod <name>;` to `src/commands/mod.rs`.
 3. Add a variant to `Command` in `src/cli.rs`.
-4. Add the dispatch arm in `src/main.rs`.
+4. In `src/dispatch.rs`: add a match arm for the new variant in `command_to_name_and_args`,
+   implement the `Command` trait for it (a `<Name>Cmd` struct with `execute`), and register
+   it with `registry.register(Box::new(<Name>Cmd))` in `build_registry`.
 5. Write unit tests in the same file under `#[cfg(test)]`.
 
 ---

@@ -5,17 +5,47 @@
 //! different drives or mount points, which `std::fs::rename` does not support.
 
 use anyhow::{Context, Result};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Creates or replaces the `~/.gvm/current` junction/symlink so it points to
 /// `target`.
 ///
 /// On Windows an NTFS junction (reparse point) is used: no elevation and no
 /// Developer Mode is required. On Unix a directory symbolic link is used.
-/// Any existing link or empty directory at `link` is atomically replaced.
+///
+/// The new link is created at a temporary sibling path first and only swapped
+/// into place once creation succeeds. This matters because junction creation
+/// on Windows shells out to `mklink` and can be blocked by antivirus
+/// software: if it failed after the existing link had already been removed,
+/// `current` would be left pointing at nothing until the next successful
+/// `gvm use`. Building the replacement first means a failure here leaves the
+/// existing link untouched.
 pub fn set_version_link(link: &Path, target: &Path) -> Result<()> {
-    remove_link_if_exists(link)?;
-    create_link(link, target)
+    let tmp_link = tmp_link_path(link);
+    // Clean up any leftover temp link from a previous failed attempt.
+    let _ = remove_link_if_exists(&tmp_link);
+
+    create_link(&tmp_link, target)?;
+
+    if let Err(e) = remove_link_if_exists(link) {
+        let _ = remove_link_if_exists(&tmp_link);
+        return Err(e);
+    }
+
+    std::fs::rename(&tmp_link, link).with_context(|| {
+        format!(
+            "Failed to activate new link at {} (staged at {})",
+            link.display(),
+            tmp_link.display()
+        )
+    })
+}
+
+/// Returns a temporary sibling path used to stage a new link before it is
+/// swapped into place at `link`.
+fn tmp_link_path(link: &Path) -> PathBuf {
+    let file_name = link.file_name().unwrap_or_default().to_string_lossy();
+    link.with_file_name(format!("{file_name}.tmp-{}", std::process::id()))
 }
 
 #[cfg(windows)]
@@ -44,13 +74,22 @@ fn remove_link_if_exists(link: &Path) -> Result<()> {
 
 #[cfg(windows)]
 fn create_link(link: &Path, target: &Path) -> Result<()> {
+    // mklink is a cmd.exe builtin, not a real executable: cmd re-scans its
+    // whole command line for "/" followed by a letter as a switch, even
+    // mid-argument. A forward-slash path (e.g. GVM_DIR="C:/Users/x/.gvm",
+    // valid everywhere else on Windows, including PowerShell) makes cmd
+    // choke on "/Users" as if it were an unknown switch. Normalizing to
+    // backslashes first sidesteps the ambiguity entirely.
+    let link_arg = windows_backslash_path(link);
+    let target_arg = windows_backslash_path(target);
+
     // mklink /J creates an NTFS junction - no elevation or Developer Mode needed.
     let out = std::process::Command::new("cmd")
         .arg("/c")
         .arg("mklink")
         .arg("/J")
-        .arg(link)
-        .arg(target)
+        .arg(&link_arg)
+        .arg(&target_arg)
         .output()
         .context("Failed to run cmd for mklink")?;
     if !out.status.success() {
@@ -63,6 +102,14 @@ fn create_link(link: &Path, target: &Path) -> Result<()> {
         ));
     }
     Ok(())
+}
+
+/// Renders `path` as a string using `\` separators, regardless of whether it
+/// was built with `/`. Only meaningful on Windows, where both separators are
+/// normally interchangeable except inside cmd.exe builtins like `mklink`.
+#[cfg(windows)]
+fn windows_backslash_path(path: &Path) -> String {
+    path.display().to_string().replace('/', "\\")
 }
 
 #[cfg(not(windows))]
@@ -213,5 +260,39 @@ mod tests {
         let root = tempdir().unwrap();
         let link = root.path().join("nonexistent-link");
         assert!(remove_link_if_exists(&link).is_ok());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_backslash_path_converts_forward_slashes() {
+        let path = Path::new("C:/Users/x/.gvm/current");
+        assert_eq!(windows_backslash_path(path), r"C:\Users\x\.gvm\current");
+    }
+
+    // Regression test for a real failure found while testing on Windows:
+    // GVM_DIR set with forward slashes (valid everywhere on Windows,
+    // including PowerShell) made `cmd /c mklink` choke on "/Users" as if it
+    // were an unrecognised switch, because mklink is a cmd.exe builtin that
+    // rescans the whole command line for "/<letter>" tokens.
+    #[cfg(windows)]
+    #[test]
+    fn set_version_link_succeeds_with_forward_slash_paths() {
+        let root = tempdir().unwrap();
+        let target = root.path().join("version-a");
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::write(target.join("marker.txt"), b"a").unwrap();
+
+        let link = root.path().join("current");
+
+        // Rebuild both paths using forward slashes, as a user-set GVM_DIR
+        // containing "/" would produce.
+        let link_fwd = Path::new(&link.display().to_string().replace('\\', "/")).to_path_buf();
+        let target_fwd = Path::new(&target.display().to_string().replace('\\', "/")).to_path_buf();
+
+        set_version_link(&link_fwd, &target_fwd).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(link.join("marker.txt")).unwrap(),
+            "a"
+        );
     }
 }

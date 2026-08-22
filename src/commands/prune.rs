@@ -16,7 +16,7 @@ use colored::Colorize;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use crate::{config::Config, lock, toolchain, version::GoVersion};
+use crate::{config::Config, lock, prompt, toolchain, version::GoVersion};
 
 /// Finds and removes unreferenced installed Go versions.
 ///
@@ -123,14 +123,12 @@ pub fn run(config: &Config, force: bool, dry_run: bool, scan_dir: Option<&str>) 
     // ── Confirmation ──────────────────────────────────────────────────────────
 
     if !force {
-        eprint!(
+        let message = format!(
             "  Remove {} version{}? [y/N] ",
             to_remove.len(),
             if to_remove.len() == 1 { "" } else { "s" }
         );
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
-        if !matches!(input.trim().to_lowercase().as_str(), "y" | "yes") {
+        if !prompt::confirm(&message)? {
             bail!("Aborted.");
         }
         println!();

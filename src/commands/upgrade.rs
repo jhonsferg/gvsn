@@ -19,7 +19,7 @@ use anyhow::{Context, Result};
 use colored::Colorize;
 use std::path::Path;
 
-use crate::{archive::download, http::HttpClient};
+use crate::{archive::download, config::Config, http::HttpClient, lock};
 
 /// GitHub repository slug used to build the Releases API URL.
 const REPO: &str = "jhonsferg/gvm-rs";
@@ -54,7 +54,7 @@ struct GithubRelease {
 /// - The GitHub API cannot be reached or returns an unexpected response.
 /// - The archive cannot be downloaded or extracted.
 /// - The in-place replacement fails (e.g. permission denied).
-pub fn run(client: &HttpClient, force: bool) -> Result<()> {
+pub fn run(config: &Config, client: &HttpClient, force: bool) -> Result<()> {
     let current = env!("CARGO_PKG_VERSION");
 
     println!("{} Checking for updates...", "->".cyan());
@@ -121,7 +121,11 @@ pub fn run(client: &HttpClient, force: bool) -> Result<()> {
     let _ = std::fs::remove_file(&tmp_archive);
     let tmp_bin = tmp_bin?;
 
-    if let Err(e) = replace_binary(&tmp_bin) {
+    // Replace the running binary under a lock so two concurrent `gvm upgrade`
+    // invocations cannot interleave their rename steps against the same
+    // executable path.
+    let lock_path = config.root.join(".lock");
+    if let Err(e) = lock::with_lock(&lock_path, || replace_binary(&tmp_bin)) {
         let _ = std::fs::remove_file(&tmp_bin);
         return Err(e);
     }

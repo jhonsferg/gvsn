@@ -71,8 +71,11 @@ pub fn run(
                 "->".cyan(),
                 version.tag().bold()
             );
-            std::fs::remove_dir_all(config.version_dir(&version.tag()))
-                .context("Failed to remove existing installation")?;
+            let lock_path = config.root.join(".lock");
+            lock::with_lock(&lock_path, || {
+                std::fs::remove_dir_all(config.version_dir(&version.tag()))
+                    .context("Failed to remove existing installation")
+            })?;
         } else {
             println!(
                 "{} Go {} is already installed.",
@@ -110,42 +113,52 @@ pub fn run(
         bootstrap::resolve_bootstrap(config, client, &version, bootstrap_spec, &releases)?;
     println!("{} Bootstrap: {}", "->".cyan(), bootstrap.label.bold());
 
-    // Download source tarball.
+    // Download and extract the source tarball under a lock: the destination
+    // path in tmp/ is deterministic per version, so a concurrent `gvm build`
+    // or `gvm install` of the same version must not write to it at the same
+    // time. The lock is released before compilation starts below, since
+    // compilation only touches the unique staging directory.
+    let lock_path = config.root.join(".lock");
     let src_archive = config.tmp_dir().join(&src_file.filename);
-    println!(
-        "{} Downloading {}...",
-        "->".cyan(),
-        src_file.filename.bold()
-    );
-    if let Err(e) = download::fetch(
-        client,
-        &index::download_url(&src_file.filename),
-        &src_archive,
-    ) {
-        let _ = std::fs::remove_file(&src_archive);
-        bootstrap::cleanup_bootstrap(&bootstrap);
-        return Err(e).context("Failed to download source tarball");
-    }
+    let staging_dir = {
+        let _lock = lock::FileLock::lock(&lock_path)?;
 
-    // Verify SHA-256 checksum.
-    if !src_file.sha256.is_empty() {
-        println!("{} Verifying checksum...", "->".cyan());
-        if let Err(e) = download::verify_sha256(&src_archive, &src_file.sha256) {
+        println!(
+            "{} Downloading {}...",
+            "->".cyan(),
+            src_file.filename.bold()
+        );
+        if let Err(e) = download::fetch(
+            client,
+            &index::download_url(&src_file.filename),
+            &src_archive,
+        ) {
             let _ = std::fs::remove_file(&src_archive);
             bootstrap::cleanup_bootstrap(&bootstrap);
-            return Err(e);
+            return Err(e).context("Failed to download source tarball");
         }
-    }
 
-    // Extract source into a unique staging dir to avoid races with other commands.
-    let staging_dir = TempDir::new_in(config.tmp_dir(), format!("src-{}", version.tag()))?;
+        // Verify SHA-256 checksum.
+        if !src_file.sha256.is_empty() {
+            println!("{} Verifying checksum...", "->".cyan());
+            if let Err(e) = download::verify_sha256(&src_archive, &src_file.sha256) {
+                let _ = std::fs::remove_file(&src_archive);
+                bootstrap::cleanup_bootstrap(&bootstrap);
+                return Err(e);
+            }
+        }
 
-    if let Err(e) = extract::unpack(&src_archive, staging_dir.path()) {
+        // Extract source into a unique staging dir to avoid races with other commands.
+        let staging_dir = TempDir::new_in(config.tmp_dir(), format!("src-{}", version.tag()))?;
+
+        if let Err(e) = extract::unpack(&src_archive, staging_dir.path()) {
+            let _ = std::fs::remove_file(&src_archive);
+            bootstrap::cleanup_bootstrap(&bootstrap);
+            return Err(e).context("Failed to extract source tarball");
+        }
         let _ = std::fs::remove_file(&src_archive);
-        bootstrap::cleanup_bootstrap(&bootstrap);
-        return Err(e).context("Failed to extract source tarball");
-    }
-    let _ = std::fs::remove_file(&src_archive);
+        staging_dir
+    };
 
     // The Go source tarball always extracts to a `go/` subdirectory.
     let source_root = staging_dir.path().join("go");

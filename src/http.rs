@@ -26,6 +26,15 @@ impl HttpClient {
     pub fn new(verbose: bool, retries: u8) -> Result<Self> {
         let agent = ureq::Agent::config_builder()
             .timeout_connect(Some(Duration::from_secs(15)))
+            // Bounds the whole request (connect + write + read), so a
+            // connection that stalls after the handshake (flaky Wi-Fi, a CDN
+            // that stops sending bytes) fails and hits the retry/back-off
+            // logic instead of hanging forever. Kept generous (5 min) because
+            // downloads share this client: `archive::download::fetch` resumes
+            // from the last written byte via `Range` on retry, so a merely
+            // slow (but still progressing) transfer just continues across a
+            // couple of attempts instead of failing outright.
+            .timeout_global(Some(Duration::from_secs(300)))
             .user_agent(format!("gvm/{}", env!("CARGO_PKG_VERSION")))
             .build()
             .new_agent();

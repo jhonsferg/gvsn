@@ -1,18 +1,22 @@
 //! `gvm uninstall` - remove an installed Go version from disk.
 //!
 //! The command refuses to uninstall the currently active version to avoid
-//! leaving the environment in a broken state.
+//! leaving the environment in a broken state. Unless `--force` is passed, it
+//! also asks for confirmation before deleting anything - consistent with the
+//! other commands that remove installed toolchains (`gvm prune`, `gvm implode`).
 
 use anyhow::{bail, Result};
 use colored::Colorize;
 
-use crate::{config::Config, lock, toolchain, user_version::VersionSpec};
+use crate::{config::Config, lock, prompt, toolchain, user_version::VersionSpec};
 
 /// Removes the Go version described by `spec_str` from the local store.
 ///
 /// The function first checks whether the target version is the currently
 /// active one (via `.go-version` or global default). If it is, the command
 /// aborts with an error to protect the user from an unbootable environment.
+/// Otherwise, unless `force` is `true`, it asks for confirmation before
+/// removing the version directory.
 ///
 /// # Errors
 ///
@@ -20,8 +24,9 @@ use crate::{config::Config, lock, toolchain, user_version::VersionSpec};
 /// - `spec_str` is not a valid version spec.
 /// - No installed version matches the spec.
 /// - The target is the currently active version.
+/// - The confirmation prompt is declined.
 /// - The version directory cannot be removed.
-pub fn run(config: &Config, spec_str: &str) -> Result<()> {
+pub fn run(config: &Config, spec_str: &str, force: bool) -> Result<()> {
     let spec = VersionSpec::parse(spec_str)?;
     let version = toolchain::resolve_installed(config, &spec)?;
 
@@ -35,6 +40,14 @@ pub fn run(config: &Config, spec_str: &str) -> Result<()> {
                 version.tag()
             );
         }
+    }
+
+    if !force {
+        let message = format!("  Remove Go {}? [y/N] ", version.tag().bold());
+        if !prompt::confirm(&message)? {
+            bail!("Aborted.");
+        }
+        println!();
     }
 
     let dir = config.version_dir(&version.tag());
@@ -65,7 +78,7 @@ mod tests {
         // `.go-version` resolution.
         install_version(&config, "go1.19.9");
 
-        run(&config, "1.19.9").unwrap();
+        run(&config, "1.19.9", true).unwrap();
 
         assert!(!config.version_dir("go1.19.9").exists());
     }
@@ -76,7 +89,22 @@ mod tests {
         let config = Config {
             root: dir.path().to_path_buf(),
         };
-        assert!(run(&config, "1.19.9").is_err());
+        assert!(run(&config, "1.19.9", true).is_err());
+    }
+
+    #[test]
+    fn run_refuses_to_uninstall_the_active_version() {
+        let dir = tempdir().unwrap();
+        let config = Config {
+            root: dir.path().to_path_buf(),
+        };
+        install_version(&config, "go1.19.9");
+        std::fs::write(config.version_file(), "go1.19.9").unwrap();
+
+        let err = run(&config, "1.19.9", true).unwrap_err();
+        assert!(err.to_string().contains("currently active version"));
+        // The version must not have been removed.
+        assert!(config.version_dir("go1.19.9").exists());
     }
 
     #[test]
@@ -85,6 +113,6 @@ mod tests {
         let config = Config {
             root: dir.path().to_path_buf(),
         };
-        assert!(run(&config, "not-a-version").is_err());
+        assert!(run(&config, "not-a-version", true).is_err());
     }
 }

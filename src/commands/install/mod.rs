@@ -17,7 +17,7 @@ mod default_packages;
 mod download;
 mod extract;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use colored::Colorize;
 
 use crate::{
@@ -65,10 +65,6 @@ pub fn run(config: &Config, client: &HttpClient, spec_str: &str, force: bool) ->
                 "->".cyan(),
                 version.tag().bold()
             );
-            let lock_path = config.root.join(".lock");
-            lock::with_lock(&lock_path, || {
-                Ok(std::fs::remove_dir_all(config.version_dir(&version.tag()))?)
-            })?;
         } else {
             println!(
                 "{} Go {} is already installed.",
@@ -80,19 +76,34 @@ pub fn run(config: &Config, client: &HttpClient, spec_str: &str, force: bool) ->
         }
     }
 
-    // Download and verify the archive.
-    let archive = download::download_archive(client, config, release, &version)?;
-
-    // Extract to staging directory.
-    let source_root = extract::extract_archive(&archive.path, config, &version.tag())?;
-
-    // Move the compiled tree to the versions store.
-    let dest = config.version_dir(&version.tag());
+    // Everything below writes into the shared tmp/ download path and the
+    // versions store, so it runs under a single lock: two concurrent
+    // `gvm install`/`gvm build` invocations must not race on the same
+    // download destination or interleave their directory mutations.
     let lock_path = config.root.join(".lock");
-    lock::with_lock(&lock_path, || crate::fs::move_dir(&source_root, &dest))?;
+    let archive_path = lock::with_lock(&lock_path, || {
+        let version_dir = config.version_dir(&version.tag());
+        if force && version_dir.exists() {
+            std::fs::remove_dir_all(&version_dir)
+                .context("Failed to remove existing installation")?;
+        }
+
+        // Download and verify the archive.
+        let archive = download::download_archive(client, config, release, &version)?;
+
+        // Extract to staging directory.
+        let source_root = extract::extract_archive(&archive.path, config, &version.tag())?;
+
+        // Move the compiled tree to the versions store.
+        let dest = config.version_dir(&version.tag());
+        crate::fs::move_dir(&source_root, &dest)
+            .context("Failed to move extracted Go to versions directory")?;
+
+        Ok(archive.path)
+    })?;
 
     // Cleanup
-    let _ = std::fs::remove_file(&archive.path);
+    let _ = std::fs::remove_file(&archive_path);
 
     println!(
         "{} Go {} installed successfully.",

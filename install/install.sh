@@ -44,6 +44,18 @@ need() {
 need curl
 need tar
 
+# Computes the SHA-256 digest of $1, preferring GNU coreutils' sha256sum and
+# falling back to macOS/BSD's shasum.
+sha256_of() {
+    if command -v sha256sum > /dev/null 2>&1; then
+        sha256sum "$1" | awk '{print $1}'
+    elif command -v shasum > /dev/null 2>&1; then
+        shasum -a 256 "$1" | awk '{print $1}'
+    else
+        die "Neither 'sha256sum' nor 'shasum' is available to verify the download."
+    fi
+}
+
 # -- 2. Detect OS and architecture ---------------------------------------------
 OS="$(uname -s 2>/dev/null || echo unknown)"
 case "$OS" in
@@ -80,12 +92,18 @@ step "Detected platform: $PLATFORM-$ARCH"
 # -- 3. Resolve version --------------------------------------------------------
 if [ "$GVM_VERSION" = "latest" ]; then
     step "Fetching latest release from $API_BASE..."
-    GVM_VERSION="$(
-        curl -fsSL "$API_BASE/repos/$REPO/releases/latest" \
-        | grep '"tag_name"' \
-        | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/'
-    )"
-    [ -n "$GVM_VERSION" ] || die "Failed to resolve the latest version. Check your network."
+    API_RESPONSE="$(curl -sSL --retry 3 --max-time 30 -w '\n%{http_code}' "$API_BASE/repos/$REPO/releases/latest")" \
+        || die "Could not reach $API_BASE. Check your internet connection."
+    API_STATUS="$(printf '%s' "$API_RESPONSE" | tail -n 1)"
+    API_BODY="$(printf '%s' "$API_RESPONSE" | sed '$d')"
+    if [ "$API_STATUS" = "403" ]; then
+        die "GitHub API rate limit exceeded (HTTP 403). Try again later, or set GVM_VERSION explicitly."
+    fi
+    if [ "$API_STATUS" != "200" ]; then
+        die "Failed to resolve the latest version (HTTP $API_STATUS)."
+    fi
+    GVM_VERSION="$(printf '%s' "$API_BODY" | grep '"tag_name"' | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
+    [ -n "$GVM_VERSION" ] || die "Failed to parse the latest version from the GitHub API response."
 fi
 
 step "Installing gvm $GVM_VERSION"
@@ -93,14 +111,28 @@ step "Installing gvm $GVM_VERSION"
 # -- 4. Download archive -------------------------------------------------------
 ARCHIVE="gvm_${PLATFORM}_${ARCH}.tar.gz"
 URL="$DL_BASE/$REPO/releases/download/$GVM_VERSION/$ARCHIVE"
+CHECKSUMS_URL="$DL_BASE/$REPO/releases/download/$GVM_VERSION/checksums.txt"
 TMP_FILE="$(mktemp "${TMPDIR:-/tmp}/gvm-install.XXXXXX")"
+CHECKSUMS_FILE="$(mktemp "${TMPDIR:-/tmp}/gvm-checksums.XXXXXX")"
 
-trap 'rm -f "$TMP_FILE"' EXIT INT TERM
+trap 'rm -f "$TMP_FILE" "$CHECKSUMS_FILE"' EXIT INT TERM
 
 step "Downloading $ARCHIVE..."
-if ! curl -fSL --progress-bar "$URL" -o "$TMP_FILE"; then
+if ! curl -fSL --retry 3 --retry-delay 2 --max-time 300 --progress-bar "$URL" -o "$TMP_FILE"; then
     die "Download failed.\n  URL: $URL\n  Check that release $GVM_VERSION exists."
 fi
+
+step "Verifying checksum..."
+if ! curl -fsSL --retry 3 --max-time 30 "$CHECKSUMS_URL" -o "$CHECKSUMS_FILE"; then
+    die "Failed to download checksums.txt for verification.\n  URL: $CHECKSUMS_URL"
+fi
+EXPECTED_SHA="$(awk -v f="$ARCHIVE" '$2 == f {print $1}' "$CHECKSUMS_FILE")"
+[ -n "$EXPECTED_SHA" ] || die "No checksum entry found for $ARCHIVE in checksums.txt"
+ACTUAL_SHA="$(sha256_of "$TMP_FILE")"
+if [ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]; then
+    die "Checksum mismatch for $ARCHIVE!\n  expected: $EXPECTED_SHA\n  got:      $ACTUAL_SHA"
+fi
+ok "Checksum verified"
 
 # -- 5. Extract and install binary ---------------------------------------------
 mkdir -p "$INSTALL_DIR"

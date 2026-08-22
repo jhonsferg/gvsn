@@ -65,6 +65,11 @@ pub fn fetch(client: &HttpClient, url: &str, dest: &Path) -> Result<()> {
 /// Returns an error if `file` cannot be read or the digest does not match.
 pub fn verify_sha256(file: &Path, expected: &str) -> Result<()> {
     if expected.is_empty() {
+        eprintln!(
+            "  {} No published checksum for {} - integrity not verified.",
+            "!".yellow(),
+            file.display()
+        );
         return Ok(());
     }
 
@@ -334,5 +339,71 @@ mod tests {
     fn part_path_handles_paths_without_extension() {
         let dest = Path::new("go-archive");
         assert_eq!(part_path(dest), PathBuf::from("go-archive.part"));
+    }
+
+    /// End-to-end regression test for resume: a `.part` file with some bytes
+    /// already on disk must produce a `Range` request for the remaining
+    /// bytes, and the response must be appended (not overwritten) so the
+    /// final file matches the full original content. Previously only the
+    /// pure `backoff()` helper was tested - this exercises the actual
+    /// resume path against a real (minimal) HTTP server.
+    #[test]
+    fn fetch_resumes_from_existing_partial_file_via_range_request() {
+        use std::io::{BufRead, BufReader, Write};
+        use std::net::TcpListener;
+
+        let full_content = b"Hello, resumable download world!".to_vec();
+        let already_written = 5usize; // "Hello"
+        let remaining = full_content[already_written..].to_vec();
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let remaining_for_server = remaining.clone();
+        let server = thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+
+            let mut request_line = String::new();
+            reader.read_line(&mut request_line).unwrap();
+
+            let mut saw_range_header = false;
+            loop {
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap();
+                if line == "\r\n" || line.is_empty() {
+                    break;
+                }
+                if line.to_ascii_lowercase().starts_with("range:") && line.contains("bytes=5-") {
+                    saw_range_header = true;
+                }
+            }
+            assert!(
+                saw_range_header,
+                "expected a 'Range: bytes=5-' header on the resumed request"
+            );
+
+            let mut stream = stream;
+            let response = format!(
+                "HTTP/1.1 206 Partial Content\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                remaining_for_server.len()
+            );
+            stream.write_all(response.as_bytes()).unwrap();
+            stream.write_all(&remaining_for_server).unwrap();
+            stream.flush().unwrap();
+        });
+
+        let dir = tempdir().unwrap();
+        let dest = dir.path().join("out.bin");
+        std::fs::write(part_path(&dest), &full_content[..already_written]).unwrap();
+
+        let client = HttpClient::new(false, 0).unwrap();
+        let url = format!("http://{addr}/file.bin");
+        fetch(&client, &url, &dest).unwrap();
+
+        server.join().unwrap();
+
+        assert_eq!(std::fs::read(&dest).unwrap(), full_content);
+        assert!(!part_path(&dest).exists());
     }
 }

@@ -1,10 +1,12 @@
 # Rust build output
 /target/
+*.pdb
 
 # Environment and secrets
 .env
 .env.*
 !.env.example
+.envrc
 *.key
 *.pem
 
@@ -23,9 +25,17 @@ Thumbs.db
 # Personal incident-response workspace - not part of the distributed project
 /security/
 
-# Test artifacts
+# Test artifacts and scratch files
 /tmp/
 *.log
+*.tmp
+*.bak
+*.orig
 
 # OS
 Desktop.ini
+desktop.ini
+
+# AI tools
+.agents/
+.claude/

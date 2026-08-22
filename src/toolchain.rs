@@ -137,16 +137,9 @@ pub fn version_bin_path(config: &Config, version: &GoVersion) -> Result<PathBuf>
 // --- Mutations ---------------------------------------------------------------
 
 /// Writes `version` to the global default version file (`~/.gvm/version`).
-///
-/// # Errors
-///
-/// Returns an error if the file cannot be written (e.g. permission denied).
-pub fn set_global_version(config: &Config, version: &GoVersion) -> Result<()> {
-    let lock_path = config.root.join(".lock");
-    lock::with_lock(&lock_path, || {
-        std::fs::write(config.version_file(), version.tag())
-            .context("Failed to write global version file")
-    })
+fn write_global_version_file(config: &Config, version: &GoVersion) -> Result<()> {
+    std::fs::write(config.version_file(), version.tag())
+        .context("Failed to write global version file")
 }
 
 /// Updates the `~/.gvm/current` junction/symlink to point to `version`.
@@ -155,18 +148,29 @@ pub fn set_global_version(config: &Config, version: &GoVersion) -> Result<()> {
 /// and editors (VSCode, GoLand) without any per-shell hook. The PATH entry
 /// `~/.gvm/current/bin` is added to the Windows registry once during install;
 /// afterwards only the junction target needs to change on every `gvm use`.
+fn write_current_link(config: &Config, version: &GoVersion) -> Result<()> {
+    let link = config.current_dir();
+    let target = config.version_dir(&version.tag());
+    gvm_fs::set_version_link(&link, &target)
+        .with_context(|| format!("Failed to update current link to {}", version.tag()))
+}
+
+/// Sets `version` as the active global version: writes `~/.gvm/version` and
+/// repoints the `~/.gvm/current` link, both under a single lock acquisition.
+///
+/// Both writes happen under one locked section so another `gvm` process can
+/// never observe (or interleave between) the version file and the `current`
+/// link pointing at different versions.
 ///
 /// # Errors
 ///
-/// Returns an error if the junction/symlink cannot be created (e.g. the
-/// version directory does not exist, or file-system permissions prevent it).
-pub fn update_current_link(config: &Config, version: &GoVersion) -> Result<()> {
+/// Returns an error if the version file cannot be written or the link cannot
+/// be created.
+pub fn set_active_version(config: &Config, version: &GoVersion) -> Result<()> {
     let lock_path = config.root.join(".lock");
     lock::with_lock(&lock_path, || {
-        let link = config.current_dir();
-        let target = config.version_dir(&version.tag());
-        gvm_fs::set_version_link(&link, &target)
-            .with_context(|| format!("Failed to update current link to {}", version.tag()))
+        write_global_version_file(config, version)?;
+        write_current_link(config, version)
     })
 }
 
@@ -289,10 +293,12 @@ mod tests {
     }
 
     #[test]
-    fn set_global_version_writes_tag_to_file() {
+    fn set_active_version_writes_tag_to_file() {
         let (_dir, config) = make_config();
+        let tag = "go1.22.4";
+        install(&config, tag);
         let v = GoVersion::parse("1.22.4").unwrap();
-        set_global_version(&config, &v).unwrap();
+        set_active_version(&config, &v).unwrap();
         assert_eq!(
             std::fs::read_to_string(config.version_file()).unwrap(),
             "go1.22.4"
@@ -300,14 +306,14 @@ mod tests {
     }
 
     #[test]
-    fn update_current_link_points_to_version_dir() {
+    fn set_active_version_points_current_link_to_version_dir() {
         let (_dir, config) = make_config();
         let tag = "go1.22.4";
         install(&config, tag);
         std::fs::write(config.version_dir(tag).join("marker.txt"), b"x").unwrap();
         let v = GoVersion::parse("1.22.4").unwrap();
 
-        update_current_link(&config, &v).unwrap();
+        set_active_version(&config, &v).unwrap();
 
         assert!(config.current_dir().join("marker.txt").exists());
     }

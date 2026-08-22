@@ -225,8 +225,8 @@ impl Command for UninstallCmd {
         args: Vec<String>,
     ) -> Result<()> {
         let _ = client;
-        let spec_str = args.first().cloned().unwrap_or_default();
-        uninstall::run(config, &spec_str)
+        let (spec_str, force) = parse_install_args(&args);
+        uninstall::run(config, &spec_str, force)
     }
 }
 
@@ -570,7 +570,6 @@ impl Command for UpgradeCmd {
         client: Option<&HttpClient>,
         args: Vec<String>,
     ) -> Result<()> {
-        let _ = config;
         let client = client.expect("upgrade requires HTTP client");
         let mut force = false;
         for arg in &args {
@@ -578,7 +577,7 @@ impl Command for UpgradeCmd {
                 force = true;
             }
         }
-        upgrade::run(client, force)
+        upgrade::run(config, client, force)
     }
 }
 
@@ -630,7 +629,6 @@ impl Command for BuildCmd {
         let mut no_cgo = false;
         let mut bootstrap = None;
         let mut env_vars = Vec::new();
-        let mut _retries = 3u8;
 
         let mut i = 0;
         while i < args.len() {
@@ -650,10 +648,10 @@ impl Command for BuildCmd {
                     }
                 }
                 "--retries" => {
+                    // Consumed here only to skip its value - the actual
+                    // retry count already flows through the shared
+                    // `HttpClient` built in `main.rs` before dispatch.
                     i += 1;
-                    if i < args.len() {
-                        _retries = args[i].parse().unwrap_or(3);
-                    }
                 }
                 _ if !args[i].starts_with('-') => {
                     version = args[i].clone();
@@ -730,7 +728,13 @@ pub fn command_to_name_and_args(cmd: &crate::cli::Command) -> (String, Vec<Strin
         Use { version } => ("use".to_string(), vec![version.clone()]),
         Default { version } => ("default".to_string(), vec![version.clone()]),
         Local { version } => ("local".to_string(), vec![version.clone()]),
-        Uninstall { version } => ("uninstall".to_string(), vec![version.clone()]),
+        Uninstall { version, force } => {
+            let mut args = vec![version.clone()];
+            if *force {
+                args.push("--force".to_string());
+            }
+            ("uninstall".to_string(), args)
+        }
         List => ("list".to_string(), vec![]),
         ListRemote { all } => {
             let mut args = vec![];
@@ -1101,9 +1105,20 @@ mod tests {
         );
         assert_eq!(
             command_to_name_and_args(&CliCommand::Uninstall {
-                version: "1.22.4".to_string()
+                version: "1.22.4".to_string(),
+                force: false,
             }),
             ("uninstall".to_string(), vec!["1.22.4".to_string()])
+        );
+        assert_eq!(
+            command_to_name_and_args(&CliCommand::Uninstall {
+                version: "1.22.4".to_string(),
+                force: true,
+            }),
+            (
+                "uninstall".to_string(),
+                vec!["1.22.4".to_string(), "--force".to_string()]
+            )
         );
     }
 

@@ -37,6 +37,9 @@ pub struct Cli {
     /// Useful for diagnosing network issues, proxy behaviour, or unexpected
     /// server responses. Output is written to stderr so it does not interfere
     /// with commands that emit machine-readable text to stdout.
+    ///
+    /// On `gvm build` this flag additionally streams the Go compiler's
+    /// output live instead of showing a progress message.
     #[arg(long, short = 'v', global = true)]
     pub verbose: bool,
 }
@@ -62,7 +65,8 @@ pub enum Command {
     /// ```
     ///
     /// **Note**: building from source takes 5-15 minutes and requires ~3 GB of
-    /// disk space.
+    /// disk space. Pass the global `-v`/`--verbose` flag to stream the
+    /// compiler's output live instead of a progress message.
     Build {
         /// Version spec to build: an exact version (`1.22.4`), a minor range
         /// (`1.22`), or the keyword `latest`.
@@ -131,9 +135,17 @@ pub enum Command {
     },
 
     /// Remove an installed Go version from disk.
+    ///
+    /// A confirmation prompt is shown unless `--force` is passed. The command
+    /// always refuses to remove the currently active version, regardless of
+    /// `--force`.
     Uninstall {
         /// Version spec to remove.
         version: String,
+
+        /// Skip the confirmation prompt and remove the version immediately.
+        #[arg(long, short = 'f')]
+        force: bool,
     },
 
     /// List all locally installed Go versions.
