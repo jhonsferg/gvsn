@@ -4,4 +4,4 @@
 # Lines starting with # are comments.
 
 zonagol-pe
-wpillaca
+wpillacam

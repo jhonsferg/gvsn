@@ -7,6 +7,18 @@
 #   2. Commits authored by the maintainer's email in repos owned by someone else
 #      (catches renamed clones that still carry over the original commit history).
 #
+# Strategy 1 alone is noisy: "gvm" is not unique to this project (it also
+# stands for Greenbone Vulnerability Management, among others), so a plain
+# name search reliably turns up unrelated repos - confirmed in practice by
+# issue #53, where 3 of its 4 findings turned out to be unrelated projects
+# that merely share part of the name. Strategy 1 candidates are therefore run
+# through clone-similarity.sh, which checks actual file content (a
+# distinctive source fingerprint, README overlap, Cargo.toml package name)
+# against this repository, and are only kept if the score clears
+# $CONTENT_SCORE_THRESHOLD. Strategy 2 candidates are not scored - sharing
+# actual commit history authored by the maintainer's email is already
+# decisive on its own.
+#
 # Findings are filtered against .github/clone-watch-allowlist.txt (known legitimate
 # collaborations) and deduplicated against already-open `clone-watch` issues before
 # a new issue is filed.
@@ -18,6 +30,8 @@ REPO_NAME="${REPO_NAME:?REPO_NAME env var required}"
 AUTHOR_EMAIL="${AUTHOR_EMAIL:?AUTHOR_EMAIL env var required}"
 ALLOWLIST_FILE="${ALLOWLIST_FILE:-.github/clone-watch-allowlist.txt}"
 LABEL="clone-watch"
+CONTENT_SCORE_THRESHOLD="${CONTENT_SCORE_THRESHOLD:-40}"
+SIMILARITY_SCRIPT="$(dirname "${BASH_SOURCE[0]}")/clone-similarity.sh"
 
 is_allowlisted() {
   local candidate_owner_lower
@@ -36,8 +50,29 @@ is_allowlisted() {
 }
 
 echo "== Strategy 1: repos named '$REPO_NAME' not owned by $OWNER =="
-name_matches=$(gh api "search/repositories?q=${REPO_NAME}+in:name&per_page=50" \
-  --jq ".items[] | select(.owner.login != \"$OWNER\") | select(.fork == false) | \"\(.full_name)|\(.owner.login)|\(.html_url)|\(.created_at)|name-match\"")
+name_match_candidates=$(gh api "search/repositories?q=${REPO_NAME}+in:name&per_page=50" \
+  --jq ".items[] | select(.owner.login != \"$OWNER\") | select(.fork == false) | \"\(.full_name)|\(.owner.login)|\(.html_url)|\(.created_at)\"")
+
+echo "== Strategy 1b: scoring name-match candidates by content similarity (threshold: $CONTENT_SCORE_THRESHOLD) =="
+name_matches=""
+while IFS= read -r candidate; do
+  [ -z "$candidate" ] && continue
+  cand_full_name="$(echo "$candidate" | cut -d'|' -f1)"
+  cand_owner="$(echo "$candidate" | cut -d'|' -f2)"
+
+  score_line="$(bash "$SIMILARITY_SCRIPT" "$cand_owner" "$(echo "$cand_full_name" | cut -d'/' -f2)")"
+  score="$(echo "$score_line" | grep -oE 'SCORE=[0-9]+' | cut -d'=' -f2)"
+  signals="$(echo "$score_line" | grep -oE 'SIGNALS=.*' | cut -d'=' -f2-)"
+
+  if [ "${score:-0}" -lt "$CONTENT_SCORE_THRESHOLD" ]; then
+    echo "skip (content score ${score:-0} < ${CONTENT_SCORE_THRESHOLD}, signals: ${signals:-none}): $cand_full_name"
+    continue
+  fi
+
+  echo "keep (content score ${score}, signals: ${signals}): $cand_full_name"
+  name_matches="${name_matches}${candidate}|name-match (content-score=${score}: ${signals})"$'\n'
+done <<< "$name_match_candidates"
+name_matches=$(echo "$name_matches" | sed '/^$/d')
 
 echo "== Strategy 2: commits authored by $AUTHOR_EMAIL in repos not owned by $OWNER =="
 commit_matches=$(gh api "search/commits?q=author-email:${AUTHOR_EMAIL}&per_page=50" \
@@ -83,6 +118,8 @@ fi
 body="Automated scan found repositories that may be unauthorized clones of \`${OWNER}/${REPO_NAME}\`.
 
 This does **not** automatically mean malicious intent - review each one manually before taking any action (e.g. reporting to GitHub via https://github.com/contact/report-abuse). See [SECURITY.md](../blob/main/SECURITY.md#malicious-forks--clones) for the criteria and process.
+
+Name-only matches are additionally scored by actual content similarity against this repository (source fingerprint, README overlap, \`Cargo.toml\` package name) before being listed here - see the score/signals in \"Detected via\" for each finding, and \`.github/scripts/clone-similarity.sh\` for the methodology. Commit-history matches are not scored, since sharing this project's actual commit history is already conclusive on its own.
 
 If a finding here is actually a legitimate collaboration, add its owner to \`.github/clone-watch-allowlist.txt\` to silence it.
 
