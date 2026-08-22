@@ -208,6 +208,47 @@ fn path_already_present(entries: &[String], candidate: &std::path::Path) -> bool
         .any(|e| e.eq_ignore_ascii_case(candidate.as_ref()))
 }
 
+/// Broadcasts `WM_SETTINGCHANGE` so running processes - most importantly
+/// Explorer - refresh their cached environment block immediately.
+///
+/// Writing `HKCU\Environment` alone is not enough: Explorer (and anything it
+/// spawns - the Start Menu, the taskbar, double-clicking an `.exe`) keeps its
+/// own copy of the environment from whenever it last started, and normally
+/// only refreshes it on this broadcast, a logoff, or a restart. Without it, a
+/// GUI application like VS Code or GoLand launched right after `gvm setup`/
+/// `gvm use` still sees the *old* PATH and fails to find `go`, even though
+/// any terminal opened afterward works fine (terminals inherit PATH fresh
+/// from Explorer at spawn time once Explorer itself has the update).
+///
+/// This only affects newly spawned processes - a GUI app that was already
+/// running keeps whatever environment it started with regardless, since
+/// Windows has no way to inject new environment variables into a live
+/// process. It still needs to be closed and reopened once.
+///
+/// Best-effort: failures are ignored. Worst case, the pre-existing "restart
+/// your terminal or log out/in" guidance still applies.
+#[cfg(target_os = "windows")]
+fn broadcast_environment_change() {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        SendMessageTimeoutW, HWND_BROADCAST, SMTO_ABORTIFHUNG, WM_SETTINGCHANGE,
+    };
+
+    let param: Vec<u16> = "Environment\0".encode_utf16().collect();
+    let mut result: usize = 0;
+    unsafe {
+        SendMessageTimeoutW(
+            HWND_BROADCAST as HWND,
+            WM_SETTINGCHANGE,
+            0,
+            param.as_ptr() as isize,
+            SMTO_ABORTIFHUNG,
+            5000,
+            &mut result,
+        );
+    }
+}
+
 /// Adds the gvm binary directory and `~\.gvm\current\bin` to the user PATH
 /// in the Windows registry (HKCU\Environment).
 ///
@@ -263,8 +304,12 @@ fn inject_windows_registry() -> Result<()> {
         let new_path = entries.join(";");
         env.set_value("PATH", &new_path)
             .context("Cannot write PATH to HKCU\\Environment")?;
+        broadcast_environment_change();
         println!("  {} User PATH updated in registry", "✓".green());
-        println!("  Restart your terminal or log out/in for the change to take effect.");
+        println!(
+            "  New terminals and GUI apps (VSCode, GoLand, ...) will pick this up automatically."
+        );
+        println!("  Already-open ones need to be restarted to see it.");
     }
 
     Ok(())
@@ -300,6 +345,7 @@ fn strip_windows_registry() -> Result<()> {
     if new_path != current_path {
         env.set_value("PATH", &new_path)
             .context("Cannot write PATH to HKCU\\Environment")?;
+        broadcast_environment_change();
         println!(
             "  {} Removed gvm entries from user PATH (registry)",
             "✓".green()
@@ -316,6 +362,17 @@ mod tests {
     use super::*;
     #[cfg(not(target_os = "windows"))]
     use std::path::PathBuf;
+
+    // Smoke test only: confirms the WM_SETTINGCHANGE broadcast itself is a
+    // well-formed call that doesn't crash the process. It never touches the
+    // registry, so it's safe to run in CI - it can't verify that Explorer
+    // actually refreshes its cached environment, which requires a real
+    // interactive desktop session to observe.
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn broadcast_environment_change_does_not_panic() {
+        broadcast_environment_change();
+    }
 
     #[test]
     fn path_already_present_matches_case_insensitively() {
