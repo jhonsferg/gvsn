@@ -18,25 +18,38 @@
 use anyhow::Result;
 use colored::Colorize;
 
-use crate::{config::Config, shell, toolchain};
+use crate::{commands::setup, config::Config, shell, toolchain, version::GoVersion};
 
 /// Runs all environment checks and prints a summary.
 ///
 /// When `shell_str` is provided it overrides shell auto-detection for the
 /// profile check. The function exits the process with code `1` if any issue
-/// is found.
+/// remains after checking (and, if `fix` is `true`, after attempting repairs).
+///
+/// When `fix` is `true`, two classes of issue are repaired automatically
+/// after the checks run:
+/// - A missing/stale shell hook or missing PATH entry (checks 1 and 7) is
+///   fixed by running the same logic as `gvm setup`.
+/// - A missing `~/.gvm/current` junction (check 5) is recreated by
+///   re-pointing it at the installed global version, if one is set.
+///
+/// Everything else (an uninstalled global version, a `.go-version` pointing
+/// at an uninstalled version, a shadowed non-gvm `go` on `PATH`) requires a
+/// choice only the user can make (which version, whether to uninstall
+/// something) and is never auto-fixed.
 ///
 /// # Errors
 ///
 /// This function only returns `Err` for unexpected I/O failures. Diagnostic
 /// failures are reported to stdout and tracked in the `issues` counter rather
 /// than being propagated as errors.
-pub fn run(config: &Config, shell_str: Option<&str>) -> Result<()> {
+pub fn run(config: &Config, shell_str: Option<&str>, fix: bool) -> Result<()> {
     println!("Checking gvm environment...\n");
     let mut issues = 0u32;
     let go_name = if cfg!(windows) { "go.exe" } else { "go" };
 
     // ---- Check 1: gvm binary on PATH ----------------------------------------
+    let mut path_issue = false;
     if shell::gvm_in_path() {
         ok("gvm binary is in PATH");
     } else {
@@ -46,9 +59,11 @@ pub fn run(config: &Config, shell_str: Option<&str>) -> Result<()> {
             .unwrap_or_else(|| "<unknown>".to_string());
         fail(&format!("gvm is NOT in PATH  (add '{dir}' to your PATH)"));
         issues += 1;
+        path_issue = true;
     }
 
     // ---- Check 2 & 3: global version set and installed ----------------------
+    let mut installed_global: Option<GoVersion> = None;
     match toolchain::global_version(config) {
         Err(_) => {
             fail("No global Go version set  (run 'gvm use <version>')");
@@ -63,6 +78,7 @@ pub fn run(config: &Config, shell_str: Option<&str>) -> Result<()> {
                 // ---- Check 4: GOROOT directory exists -----------------------
                 let root = config.version_dir(&v.tag());
                 ok(&format!("GOROOT -> {}", root.display()));
+                installed_global = Some(v);
             } else {
                 fail(&format!(
                     "{} is NOT installed  (run 'gvm install {}')",
@@ -81,7 +97,8 @@ pub fn run(config: &Config, shell_str: Option<&str>) -> Result<()> {
     // binary. Warn them so `go` works in CMD, Git Bash and editors.
     let current_dir = config.current_dir();
     let current_go = current_dir.join("bin").join(go_name);
-    if current_go.exists() {
+    let current_link_missing = !current_go.exists();
+    if !current_link_missing {
         ok(&format!(
             "~/.gvm/current junction is configured ({})",
             current_dir.display()
@@ -126,7 +143,8 @@ pub fn run(config: &Config, shell_str: Option<&str>) -> Result<()> {
         None => shell::detect(),
     };
 
-    if let Some(sh) = sh {
+    let mut profile_issue = false;
+    if let Some(sh) = &sh {
         match sh.profile_path() {
             None => warn(&format!("Cannot determine profile path for {}", sh.name())),
             Some(profile) => {
@@ -140,6 +158,7 @@ pub fn run(config: &Config, shell_str: Option<&str>) -> Result<()> {
                             profile.display()
                         ));
                         issues += 1;
+                        profile_issue = true;
                     }
                 } else {
                     fail(&format!(
@@ -147,6 +166,7 @@ pub fn run(config: &Config, shell_str: Option<&str>) -> Result<()> {
                         profile.display()
                     ));
                     issues += 1;
+                    profile_issue = true;
                 }
             }
         }
@@ -219,6 +239,66 @@ pub fn run(config: &Config, shell_str: Option<&str>) -> Result<()> {
                       to ensure gvm's PATH entry is first."
             );
             issues += 1;
+        }
+    }
+
+    // ---- Auto-fix -------------------------------------------------------------
+    if fix {
+        let mut fixed_any = false;
+        println!();
+
+        if path_issue || profile_issue {
+            match &sh {
+                Some(sh) => match setup::run(Some(sh.name()), false) {
+                    Ok(()) => {
+                        println!("  {} Ran 'gvm setup' for {}.", "->".cyan(), sh.name());
+                        if profile_issue {
+                            println!("    Shell profile hook fixed.");
+                            issues = issues.saturating_sub(1);
+                        }
+                        if path_issue {
+                            println!(
+                                "    PATH updated - open a new shell session for it to take effect."
+                            );
+                        }
+                        fixed_any = true;
+                    }
+                    Err(e) => {
+                        println!("  {} Could not run 'gvm setup': {e:#}", "x".red());
+                    }
+                },
+                None => {
+                    println!(
+                        "  {} Cannot auto-fix PATH/shell hook: no shell detected.",
+                        "!".yellow()
+                    );
+                }
+            }
+        }
+
+        if current_link_missing {
+            match &installed_global {
+                Some(v) => match toolchain::set_active_version(config, v) {
+                    Ok(()) => {
+                        println!("  {} Recreated ~/.gvm/current -> {}", "->".cyan(), v.tag());
+                        issues = issues.saturating_sub(1);
+                        fixed_any = true;
+                    }
+                    Err(e) => {
+                        println!("  {} Could not recreate ~/.gvm/current: {e:#}", "x".red());
+                    }
+                },
+                None => {
+                    println!(
+                        "  {} Cannot auto-fix ~/.gvm/current: no installed global version set.",
+                        "!".yellow()
+                    );
+                }
+            }
+        }
+
+        if !fixed_any {
+            println!("  {} Nothing to auto-fix.", "i".cyan());
         }
     }
 
