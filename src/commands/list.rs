@@ -5,8 +5,16 @@
 
 use anyhow::Result;
 use colored::Colorize;
+use serde::Serialize;
 
 use crate::{config::Config, toolchain};
+
+/// One installed version as reported by `--json`.
+#[derive(Serialize)]
+struct InstalledVersion {
+    tag: String,
+    active: bool,
+}
 
 /// Prints all installed Go versions, sorted newest-first.
 ///
@@ -15,18 +23,34 @@ use crate::{config::Config, toolchain};
 /// active - for example because no global default has been set yet - all
 /// versions are shown without highlighting.
 ///
+/// When `json` is `true`, prints a JSON array of `{"tag", "active"}` objects
+/// instead, with no other output, so the result can be piped into `jq` or
+/// parsed by a script.
+///
 /// # Errors
 ///
-/// Returns an error if the versions directory cannot be read.
-pub fn run(config: &Config) -> Result<()> {
+/// Returns an error if the versions directory cannot be read, or (`json`
+/// only) if the result cannot be serialised.
+pub fn run(config: &Config, json: bool) -> Result<()> {
     let installed = toolchain::list_installed(config)?;
+    let active = toolchain::active_version(config).map(|(v, _)| v).ok();
+
+    if json {
+        let entries: Vec<InstalledVersion> = installed
+            .iter()
+            .map(|v| InstalledVersion {
+                tag: v.tag(),
+                active: active.as_ref() == Some(v),
+            })
+            .collect();
+        println!("{}", serde_json::to_string(&entries)?);
+        return Ok(());
+    }
 
     if installed.is_empty() {
         println!("No Go versions installed. Run 'gvm install latest'.");
         return Ok(());
     }
-
-    let active = toolchain::active_version(config).map(|(v, _)| v).ok();
 
     println!("Installed Go versions:");
     for v in &installed {
@@ -59,7 +83,7 @@ mod tests {
         let config = Config {
             root: dir.path().to_path_buf(),
         };
-        run(&config).unwrap();
+        run(&config, false).unwrap();
     }
 
     #[test]
@@ -72,7 +96,7 @@ mod tests {
         install_version(&config, "go1.21.0");
         std::fs::write(config.version_file(), "go1.22.4").unwrap();
 
-        run(&config).unwrap();
+        run(&config, false).unwrap();
     }
 
     #[test]
@@ -87,6 +111,28 @@ mod tests {
         // `config.root`), so its outcome is environment-dependent here -
         // the important invariant under test is that `run` still succeeds
         // and lists the installed version either way.
-        run(&config).unwrap();
+        run(&config, false).unwrap();
+    }
+
+    #[test]
+    fn run_json_emits_array_with_active_flag() {
+        let dir = tempdir().unwrap();
+        let config = Config {
+            root: dir.path().to_path_buf(),
+        };
+        install_version(&config, "go1.22.4");
+        install_version(&config, "go1.21.0");
+        std::fs::write(config.version_file(), "go1.22.4").unwrap();
+
+        run(&config, true).unwrap();
+    }
+
+    #[test]
+    fn run_json_emits_empty_array_when_none_installed() {
+        let dir = tempdir().unwrap();
+        let config = Config {
+            root: dir.path().to_path_buf(),
+        };
+        run(&config, true).unwrap();
     }
 }
