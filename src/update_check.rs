@@ -286,10 +286,17 @@ mod tests {
 
     #[test]
     fn should_run_for_allows_regular_commands() {
-        assert!(should_run_for_env(&Command::List, false, false));
+        assert!(should_run_for_env(
+            &Command::List { json: false },
+            false,
+            false
+        ));
         assert!(should_run_for_env(&Command::Current, false, false));
         assert!(should_run_for_env(
-            &Command::Doctor { shell: None },
+            &Command::Doctor {
+                shell: None,
+                fix: false
+            },
             false,
             false
         ));
@@ -297,12 +304,20 @@ mod tests {
 
     #[test]
     fn should_run_for_respects_no_update_check_env() {
-        assert!(!should_run_for_env(&Command::List, true, false));
+        assert!(!should_run_for_env(
+            &Command::List { json: false },
+            true,
+            false
+        ));
     }
 
     #[test]
     fn should_run_for_respects_ci_env() {
-        assert!(!should_run_for_env(&Command::List, false, true));
+        assert!(!should_run_for_env(
+            &Command::List { json: false },
+            false,
+            true
+        ));
     }
 
     #[test]
