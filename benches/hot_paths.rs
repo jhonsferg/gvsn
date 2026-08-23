@@ -10,6 +10,10 @@
 //!   every `gvm upgrade` and the background update check.
 //! - [`gvm_rs::archive::download::verify_sha256`] - hashes the full archive
 //!   after every download; the one benchmark here with a real I/O component.
+//! - [`gvm_rs::version::parse_tool_versions_golang_line`] - added alongside
+//!   `.go-version` in `toolchain::active_version`'s directory walk-up, so it
+//!   now runs on every command in a project that uses an asdf-style
+//!   `.tool-versions` file instead of gvm's own pin file.
 //!
 //! Run locally with `cargo bench`. This target is intentionally never
 //! invoked from `.github/workflows/*` - see `benches/README.md`.
@@ -22,7 +26,7 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Through
 use gvm_rs::archive::download::verify_sha256;
 use gvm_rs::gvm_release::parse_semver;
 use gvm_rs::profile::ShellProfile;
-use gvm_rs::version::GoVersion;
+use gvm_rs::version::{parse_tool_versions_golang_line, GoVersion};
 
 /// Builds a synthetic shell profile with `blocks` gvm-managed blocks
 /// interleaved with unrelated user lines, roughly matching what a
@@ -109,11 +113,40 @@ fn bench_verify_sha256(c: &mut Criterion) {
     group.finish();
 }
 
+/// Builds a synthetic `.tool-versions` file with `other_tools` unrelated
+/// entries before the `golang` line, matching a real asdf-managed project
+/// that pins several runtimes.
+fn synthetic_tool_versions(other_tools: usize) -> String {
+    let mut s = String::new();
+    for i in 0..other_tools {
+        s.push_str(&format!("tool-{i} {i}.0.0\n"));
+    }
+    s.push_str("golang 1.22.4\n");
+    s
+}
+
+fn bench_parse_tool_versions_golang_line(c: &mut Criterion) {
+    let mut group = c.benchmark_group("parse_tool_versions_golang_line");
+    for other_tools in [0usize, 10, 50] {
+        let content = synthetic_tool_versions(other_tools);
+        group.throughput(Throughput::Bytes(content.len() as u64));
+        group.bench_with_input(
+            BenchmarkId::from_parameter(other_tools),
+            &content,
+            |b, content| {
+                b.iter(|| parse_tool_versions_golang_line(black_box(content)));
+            },
+        );
+    }
+    group.finish();
+}
+
 criterion_group!(
     hot_paths,
     bench_profile_parse,
     bench_go_version_parse,
     bench_parse_semver,
-    bench_verify_sha256
+    bench_verify_sha256,
+    bench_parse_tool_versions_golang_line
 );
 criterion_main!(hot_paths);
