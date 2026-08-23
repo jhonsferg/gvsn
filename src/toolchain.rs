@@ -109,13 +109,17 @@ pub fn active_version(config: &Config) -> Result<(GoVersion, VersionSource)> {
 
     loop {
         let go_version_path = dir.join(GO_VERSION_FILE);
-        if let Ok(raw) = std::fs::read_to_string(&go_version_path) {
+        if go_version_path.exists() {
+            let raw = std::fs::read_to_string(&go_version_path)
+                .with_context(|| format!("Cannot read {}", go_version_path.display()))?;
             let v = GoVersion::parse(raw.trim()).context("Corrupted .go-version")?;
             return Ok((v, VersionSource::Local));
         }
 
         let tool_versions_path = dir.join(TOOL_VERSIONS_FILE);
-        if let Ok(content) = std::fs::read_to_string(&tool_versions_path) {
+        if tool_versions_path.exists() {
+            let content = std::fs::read_to_string(&tool_versions_path)
+                .with_context(|| format!("Cannot read {}", tool_versions_path.display()))?;
             if let Some(raw) = parse_tool_versions_golang_line(&content) {
                 let v =
                     GoVersion::parse(raw).context("Corrupted golang entry in .tool-versions")?;
