@@ -43,7 +43,7 @@ pub fn run(config: &Config, shell_str: Option<&str>) -> Result<()> {
             Err(_) => {
                 if src == VersionSource::Local {
                     eprintln!(
-                        "gvm: Go {} (from .go-version) is not installed. Run: gvm install {}",
+                        "gvm: Go {} (from .go-version or .tool-versions) is not installed. Run: gvm install {}",
                         v, v
                     );
                 }
