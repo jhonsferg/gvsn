@@ -9,6 +9,10 @@ homepage = "https://github.com/jhonsferg/gvm-rs"
 keywords = ["go", "golang", "version-manager", "toolchain", "gvm"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lib]
+name = "gvm_rs"
+path = "src/lib.rs"
+
 [[bin]]
 name = "gvm"
 path = "src/main.rs"
@@ -35,6 +39,17 @@ winreg     = "0.52"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
 
 [dev-dependencies]
+criterion = "0.5"
+
+# Local-only performance benchmarks (`cargo bench`). `test = false` keeps
+# `cargo test --all-targets` (what CI runs) from also invoking this binary -
+# without it, cargo forwards CI's libtest flags (e.g. `--nocapture`) to the
+# criterion binary, which doesn't understand them and fails the build. See
+# benches/README.md for the local-only policy this enforces.
+[[bench]]
+name = "hot_paths"
+harness = false
+test = false
 
 [profile.release]
 opt-level     = 3
