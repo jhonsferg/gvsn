@@ -69,8 +69,13 @@ impl ShellProfile {
         for line in content.lines() {
             let trimmed = line.trim();
 
-            // Check if this line starts a gvm block
-            if let Some(marker) = MARKERS.iter().find(|m| trimmed.starts_with(*m)) {
+            // Check if this line starts a gvm block. Markers are always
+            // written as a complete line (see `ProfileBlock`'s `Display`
+            // impl), so matching must be exact - `starts_with` would also
+            // catch unrelated user comments that merely begin with the same
+            // text (e.g. "# gvm init fue lo primero que probe"), corrupting
+            // them into a gvm-managed block on the next `gvm setup`/`implode`.
+            if let Some(marker) = MARKERS.iter().find(|m| trimmed == **m) {
                 // Finish previous block if any
                 if let Some(block) = current_block.take() {
                     profile.blocks.push(block);
@@ -295,6 +300,26 @@ mod tests {
         assert_eq!(
             profile.blocks[0].lines,
             vec!["eval \"$(gvm env --shell bash)\""]
+        );
+    }
+
+    #[test]
+    fn parse_ignores_user_comment_with_marker_prefix() {
+        // A user comment that merely starts with a marker's text (but isn't
+        // the marker itself) must stay in the header/footer, not be treated
+        // as the start of a gvm-managed block.
+        let content = "# gvm initially I used zsh\nexport FOO=bar\n";
+        let profile = ShellProfile::parse(content);
+        assert!(
+            profile.blocks.is_empty(),
+            "a prefix match must not be treated as a gvm block"
+        );
+        assert_eq!(
+            profile.header,
+            vec![
+                "# gvm initially I used zsh".to_string(),
+                "export FOO=bar".to_string(),
+            ]
         );
     }
 

@@ -12,8 +12,10 @@
 //!   staged next to the target executable, and then atomically moved over the
 //!   current executable with `rename(2)`.
 //! - **Windows**: the archive is downloaded to a temp `.zip`, `gvm.exe` is
-//!   extracted, the running binary is renamed (freeing the name while it stays
-//!   in use), then the new binary is moved to the original path.
+//!   extracted, copied into the install directory (a `rename` from the temp
+//!   directory can fail if it's on a different volume), the running binary is
+//!   renamed (freeing the name while it stays in use), then the staged binary
+//!   is moved to the original path.
 
 use anyhow::{Context, Result};
 use colored::Colorize;
@@ -287,13 +289,30 @@ fn replace_binary_at(new_binary: &Path, exe: &Path) -> Result<()> {
 
     #[cfg(windows)]
     {
-        let old = exe.with_file_name("gvm.exe.old");
-        std::fs::rename(exe, &old)
-            .with_context(|| format!("Cannot rename current binary {}", exe.display()))?;
-
-        if let Err(e) = std::fs::rename(new_binary, exe) {
-            let _ = std::fs::rename(&old, exe);
+        // `new_binary` lives under `std::env::temp_dir()`, which may be on a
+        // different volume than the install directory (e.g. TEMP redirected
+        // to another drive, or a portable install on removable media).
+        // `rename` fails across volumes, so stage the file into the install
+        // directory with `copy` first - same pattern already used on Unix
+        // and in `fs::move_dir` - so the swap below is always a same-volume
+        // rename.
+        let staged = exe.with_file_name(format!("gvm-upgrade-{}.exe", std::process::id()));
+        if let Err(e) = std::fs::copy(new_binary, &staged) {
             let _ = std::fs::remove_file(new_binary);
+            return Err(e).context("Cannot stage new binary in install directory");
+        }
+        let _ = std::fs::remove_file(new_binary);
+
+        let old = exe.with_file_name("gvm.exe.old");
+        if let Err(e) = std::fs::rename(exe, &old) {
+            let _ = std::fs::remove_file(&staged);
+            return Err(e)
+                .with_context(|| format!("Cannot rename current binary {}", exe.display()));
+        }
+
+        if let Err(e) = std::fs::rename(&staged, exe) {
+            let _ = std::fs::rename(&old, exe);
+            let _ = std::fs::remove_file(&staged);
             return Err(e).context("Cannot place new binary - rolled back to previous version");
         }
 
