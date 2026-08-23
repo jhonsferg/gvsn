@@ -248,8 +248,8 @@ impl Command for ListCmd {
         args: Vec<String>,
     ) -> Result<()> {
         let _ = client;
-        let _ = args;
-        list::run(config)
+        let json = args.iter().any(|a| a == "--json");
+        list::run(config, json)
     }
 }
 
@@ -269,12 +269,15 @@ impl Command for ListRemoteCmd {
     ) -> Result<()> {
         let client = client.expect("list-remote requires HTTP client");
         let mut all = false;
+        let mut json = false;
         for arg in &args {
-            if arg == "--all" {
-                all = true;
+            match arg.as_str() {
+                "--all" => all = true,
+                "--json" => json = true,
+                _ => {}
             }
         }
-        list_remote::run(config, client, all)
+        list_remote::run(config, client, all, json)
     }
 }
 
@@ -428,8 +431,23 @@ impl Command for DoctorCmd {
         args: Vec<String>,
     ) -> Result<()> {
         let _ = client;
-        let shell_str = args.first().cloned();
-        doctor::run(config, shell_str.as_deref())
+        let mut shell_str = None;
+        let mut fix = false;
+        let mut i = 0;
+        while i < args.len() {
+            match args[i].as_str() {
+                "--shell" => {
+                    i += 1;
+                    if i < args.len() {
+                        shell_str = Some(args[i].clone());
+                    }
+                }
+                "--fix" => fix = true,
+                _ => {}
+            }
+            i += 1;
+        }
+        doctor::run(config, shell_str.as_deref(), fix)
     }
 }
 
@@ -471,9 +489,9 @@ impl Command for OutdatedCmd {
         client: Option<&HttpClient>,
         args: Vec<String>,
     ) -> Result<()> {
-        let _ = args;
+        let json = args.iter().any(|a| a == "--json");
         let client = client.expect("outdated requires HTTP client");
-        outdated::run(config, client)
+        outdated::run(config, client, json)
     }
 }
 
@@ -735,11 +753,20 @@ pub fn command_to_name_and_args(cmd: &crate::cli::Command) -> (String, Vec<Strin
             }
             ("uninstall".to_string(), args)
         }
-        List => ("list".to_string(), vec![]),
-        ListRemote { all } => {
+        List { json } => {
+            let mut args = vec![];
+            if *json {
+                args.push("--json".to_string());
+            }
+            ("list".to_string(), args)
+        }
+        ListRemote { all, json } => {
             let mut args = vec![];
             if *all {
                 args.push("--all".to_string());
+            }
+            if *json {
+                args.push("--json".to_string());
             }
             ("list-remote".to_string(), args)
         }
@@ -777,11 +804,14 @@ pub fn command_to_name_and_args(cmd: &crate::cli::Command) -> (String, Vec<Strin
             args.extend(cmd_args.clone());
             ("exec".to_string(), args)
         }
-        Doctor { shell } => {
+        Doctor { shell, fix } => {
             let mut args = vec![];
             if let Some(s) = shell {
                 args.push("--shell".to_string());
                 args.push(s.clone());
+            }
+            if *fix {
+                args.push("--fix".to_string());
             }
             ("doctor".to_string(), args)
         }
@@ -800,7 +830,13 @@ pub fn command_to_name_and_args(cmd: &crate::cli::Command) -> (String, Vec<Strin
             }
             ("implode".to_string(), args)
         }
-        Outdated => ("outdated".to_string(), vec![]),
+        Outdated { json } => {
+            let mut args = vec![];
+            if *json {
+                args.push("--json".to_string());
+            }
+            ("outdated".to_string(), args)
+        }
         Prune {
             force,
             dry_run,
@@ -1125,15 +1161,32 @@ mod tests {
     #[test]
     fn convert_list_and_list_remote() {
         assert_eq!(
-            command_to_name_and_args(&CliCommand::List),
+            command_to_name_and_args(&CliCommand::List { json: false }),
             ("list".to_string(), vec![])
         );
         assert_eq!(
-            command_to_name_and_args(&CliCommand::ListRemote { all: true }),
+            command_to_name_and_args(&CliCommand::List { json: true }),
+            ("list".to_string(), vec!["--json".to_string()])
+        );
+        assert_eq!(
+            command_to_name_and_args(&CliCommand::ListRemote {
+                all: true,
+                json: false
+            }),
             ("list-remote".to_string(), vec!["--all".to_string()])
         );
         assert_eq!(
-            command_to_name_and_args(&CliCommand::ListRemote { all: false }),
+            command_to_name_and_args(&CliCommand::ListRemote {
+                all: false,
+                json: true
+            }),
+            ("list-remote".to_string(), vec!["--json".to_string()])
+        );
+        assert_eq!(
+            command_to_name_and_args(&CliCommand::ListRemote {
+                all: false,
+                json: false
+            }),
             ("list-remote".to_string(), vec![])
         );
     }
@@ -1206,7 +1259,8 @@ mod tests {
     fn convert_doctor_completions_upgrade_implode() {
         assert_eq!(
             command_to_name_and_args(&CliCommand::Doctor {
-                shell: Some("fish".to_string())
+                shell: Some("fish".to_string()),
+                fix: false
             }),
             (
                 "doctor".to_string(),
@@ -1214,7 +1268,17 @@ mod tests {
             )
         );
         assert_eq!(
-            command_to_name_and_args(&CliCommand::Doctor { shell: None }),
+            command_to_name_and_args(&CliCommand::Doctor {
+                shell: None,
+                fix: true
+            }),
+            ("doctor".to_string(), vec!["--fix".to_string()])
+        );
+        assert_eq!(
+            command_to_name_and_args(&CliCommand::Doctor {
+                shell: None,
+                fix: false
+            }),
             ("doctor".to_string(), vec![])
         );
         assert_eq!(
@@ -1239,8 +1303,12 @@ mod tests {
     #[test]
     fn convert_outdated_and_prune() {
         assert_eq!(
-            command_to_name_and_args(&CliCommand::Outdated),
+            command_to_name_and_args(&CliCommand::Outdated { json: false }),
             ("outdated".to_string(), vec![])
+        );
+        assert_eq!(
+            command_to_name_and_args(&CliCommand::Outdated { json: true }),
+            ("outdated".to_string(), vec!["--json".to_string()])
         );
         let cmd = CliCommand::Prune {
             force: true,
