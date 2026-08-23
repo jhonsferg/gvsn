@@ -7,6 +7,7 @@
 
 use anyhow::Result;
 use colored::Colorize;
+use serde::Serialize;
 
 use crate::{
     config::Config,
@@ -14,6 +15,13 @@ use crate::{
     remote::{index, release::Release},
     toolchain,
 };
+
+/// One available release as reported by `--json`.
+#[derive(Serialize)]
+struct RemoteVersion {
+    version: String,
+    installed: bool,
+}
 
 /// Fetches the go.dev release index and prints available stable versions.
 ///
@@ -24,16 +32,37 @@ use crate::{
 /// Versions already installed locally are prefixed with `✓` to distinguish
 /// them from versions available for download.
 ///
+/// When `json` is `true`, prints a JSON array of `{"version", "installed"}`
+/// objects instead (still respecting `all`), with the "Fetching..." progress
+/// line sent to stderr so stdout stays valid JSON.
+///
 /// # Errors
 ///
-/// Returns an error if the remote release index cannot be fetched.
-pub fn run(config: &Config, client: &HttpClient, all: bool) -> Result<()> {
-    println!("{} Fetching available Go versions...", "->".cyan());
+/// Returns an error if the remote release index cannot be fetched, or
+/// (`json` only) if the result cannot be serialised.
+pub fn run(config: &Config, client: &HttpClient, all: bool, json: bool) -> Result<()> {
+    if json {
+        eprintln!("{} Fetching available Go versions...", "->".cyan());
+    } else {
+        println!("{} Fetching available Go versions...", "->".cyan());
+    }
 
-    let releases = index::fetch_releases(client)?;
+    let releases = index::fetch_releases(client, &config.root)?;
     let installed = toolchain::list_installed(config)?;
 
     let to_show = releases_to_show(&releases, all);
+
+    if json {
+        let entries: Vec<RemoteVersion> = to_show
+            .iter()
+            .map(|r| RemoteVersion {
+                version: r.version.clone(),
+                installed: installed.iter().any(|v| v.tag() == r.version),
+            })
+            .collect();
+        println!("{}", serde_json::to_string(&entries)?);
+        return Ok(());
+    }
 
     println!(
         "Available Go versions{}:",
