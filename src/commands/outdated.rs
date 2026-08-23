@@ -8,7 +8,12 @@ use anyhow::Result;
 use colored::Colorize;
 use serde::Serialize;
 
-use crate::{config::Config, http::HttpClient, remote::index, toolchain};
+use crate::{
+    config::{Config, ConfigMut},
+    http::HttpClient,
+    remote::index,
+    toolchain,
+};
 
 /// One installed version's update status as reported by `--json`.
 #[derive(Serialize)]
@@ -54,6 +59,12 @@ pub fn run(config: &Config, client: &HttpClient, json: bool) -> Result<()> {
         return Ok(());
     }
 
+    // Ensures `config.root` exists before `fetch_releases` tries to write the
+    // release-index cache there - otherwise the write silently fails (its
+    // errors are intentionally swallowed) on a machine that hasn't run
+    // `install`/`build` yet, and the cache never gets created.
+    config.ensure_dirs()?;
+
     if json {
         eprintln!("{} Fetching available Go versions...", "->".cyan());
     } else {
@@ -89,32 +100,33 @@ pub fn run(config: &Config, client: &HttpClient, json: bool) -> Result<()> {
     let mut any_outdated = false;
 
     for v in &installed {
-        // Highest patch release for the same major.minor on go.dev.
-        let latest = stable
-            .iter()
-            .filter(|rv| rv.major == v.major && rv.minor == v.minor)
-            .max()
-            .cloned();
+        let entry = build_outdated_entry(v, &stable);
+        let latest_col = entry.latest.as_deref().unwrap_or("-");
 
-        match latest {
-            None => {
+        match entry.status {
+            OutdatedStatus::Unknown => {
                 // Probably a very old minor no longer listed on go.dev.
-                println!("  {:<14} {:<14} {}", v.tag(), "-", "?  no data".dimmed());
-            }
-            Some(ref latest) if v >= latest => {
                 println!(
                     "  {:<14} {:<14} {}",
-                    v.tag(),
-                    latest.tag(),
+                    entry.installed,
+                    latest_col,
+                    "?  no data".dimmed()
+                );
+            }
+            OutdatedStatus::UpToDate => {
+                println!(
+                    "  {:<14} {:<14} {}",
+                    entry.installed,
+                    latest_col,
                     format!("{}  up to date", "✓").green()
                 );
             }
-            Some(ref latest) => {
-                let diff = latest.patch.saturating_sub(v.patch);
+            OutdatedStatus::Behind => {
+                let diff = entry.patches_behind.unwrap_or(0);
                 println!(
                     "  {:<14} {:<14} {}",
-                    v.tag(),
-                    latest.tag(),
+                    entry.installed,
+                    latest_col,
                     format!(
                         "⚠  {} patch{} behind",
                         diff,
@@ -141,8 +153,9 @@ pub fn run(config: &Config, client: &HttpClient, json: bool) -> Result<()> {
     Ok(())
 }
 
-/// Builds the `--json` status entry for one installed version, mirroring the
-/// text-output logic above (highest patch release for the same major.minor).
+/// Classifies one installed version against `stable` (highest patch release
+/// for the same major.minor on go.dev). The single source of truth for both
+/// the text and `--json` output modes above, so they can never disagree.
 fn build_outdated_entry(
     v: &crate::version::GoVersion,
     stable: &[crate::version::GoVersion],
@@ -208,6 +221,26 @@ mod tests {
         };
         let client = HttpClient::new(false, 0).unwrap();
         run(&config, &client, true).unwrap();
+    }
+
+    #[test]
+    fn run_creates_gvm_root_before_fetching_when_a_version_is_installed() {
+        // config.root does not exist yet (only the tempdir it lives under
+        // does) - regression test for the fix that ensures `ensure_dirs()`
+        // runs before `fetch_releases` tries to write the release-index
+        // cache there. The network fetch itself may fail in a sandboxed test
+        // environment; only `tmp_dir()` existing afterward proves
+        // `ensure_dirs()` ran (nothing else in `run` creates it).
+        let dir = tempdir().unwrap();
+        let config = Config {
+            root: dir.path().join("not-created-yet"),
+        };
+        std::fs::create_dir_all(config.version_dir("go1.22.4")).unwrap();
+        let client = HttpClient::new(false, 0).unwrap();
+
+        let _ = run(&config, &client, false);
+
+        assert!(config.tmp_dir().exists());
     }
 
     #[test]
