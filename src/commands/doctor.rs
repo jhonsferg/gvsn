@@ -110,22 +110,7 @@ pub fn run(config: &Config, shell_str: Option<&str>, fix: bool) -> Result<()> {
 
     // ---- Check 6: local pin file (.go-version / .tool-versions) consistency -
     if let Ok(cwd) = std::env::current_dir() {
-        let go_version_path = cwd.join(crate::version::GO_VERSION_FILE);
-        let pin = if go_version_path.exists() {
-            std::fs::read_to_string(&go_version_path)
-                .ok()
-                .map(|raw| (raw.trim().to_string(), ".go-version"))
-        } else {
-            let tool_versions_path = cwd.join(crate::version::TOOL_VERSIONS_FILE);
-            std::fs::read_to_string(&tool_versions_path)
-                .ok()
-                .and_then(|content| {
-                    crate::version::parse_tool_versions_golang_line(&content)
-                        .map(|raw| (raw.to_string(), ".tool-versions"))
-                })
-        };
-
-        if let Some((raw, source)) = pin {
+        if let Some((raw, source)) = read_local_pin(&cwd) {
             match crate::version::GoVersion::parse(&raw) {
                 Ok(v) if toolchain::is_installed(config, &v) => {
                     ok(&format!("{source} = {} (installed)", v.tag()));
@@ -253,10 +238,18 @@ pub fn run(config: &Config, shell_str: Option<&str>, fix: bool) -> Result<()> {
 
     // ---- Auto-fix -------------------------------------------------------------
     if fix {
+        // Tracks whether any fixable issue was found at all, separately from
+        // whether a fix actually succeeded - so the closing message can tell
+        // "nothing needed fixing" apart from "something needed fixing, but
+        // the attempt failed or couldn't be attempted", which must never be
+        // reported as "nothing to auto-fix" right below the error explaining
+        // why it wasn't fixed.
+        let mut attempted_any = false;
         let mut fixed_any = false;
         println!();
 
         if path_issue || profile_issue {
+            attempted_any = true;
             match &sh {
                 Some(sh) => match setup::run(Some(sh.name()), false) {
                     Ok(()) => {
@@ -286,6 +279,7 @@ pub fn run(config: &Config, shell_str: Option<&str>, fix: bool) -> Result<()> {
         }
 
         if current_link_missing {
+            attempted_any = true;
             match &installed_global {
                 Some(v) => match toolchain::set_active_version(config, v) {
                     Ok(()) => {
@@ -306,8 +300,8 @@ pub fn run(config: &Config, shell_str: Option<&str>, fix: bool) -> Result<()> {
             }
         }
 
-        if !fixed_any {
-            println!("  {} Nothing to auto-fix.", "i".cyan());
+        if let Some(msg) = fix_outcome_message(attempted_any, fixed_any) {
+            println!("  {msg}");
         }
     }
 
@@ -324,6 +318,54 @@ pub fn run(config: &Config, shell_str: Option<&str>, fix: bool) -> Result<()> {
 }
 
 // --- Private helpers ---------------------------------------------------------
+
+/// Resolves the local version pin for `dir`, checking `.go-version` first and
+/// falling back to the `golang` line of `.tool-versions`. Returns the raw
+/// (untrimmed-source, but trimmed here) version string paired with the name
+/// of the file it came from, or `None` when neither file pins a version.
+///
+/// Mirrors [`toolchain::active_version`]'s precedence, but for a single
+/// directory (check 6 only cares about the current directory, not the
+/// walk-up-to-root resolution `active_version` does) and without the "must
+/// error on unreadable file" strictness that function needs - a doctor check
+/// is diagnostic, not a resolution path something else depends on.
+fn read_local_pin(dir: &std::path::Path) -> Option<(String, &'static str)> {
+    let go_version_path = dir.join(crate::version::GO_VERSION_FILE);
+    if go_version_path.exists() {
+        return std::fs::read_to_string(&go_version_path)
+            .ok()
+            .map(|raw| (raw.trim().to_string(), ".go-version"));
+    }
+
+    let tool_versions_path = dir.join(crate::version::TOOL_VERSIONS_FILE);
+    std::fs::read_to_string(&tool_versions_path)
+        .ok()
+        .and_then(|content| {
+            crate::version::parse_tool_versions_golang_line(&content)
+                .map(|raw| (raw.to_string(), ".tool-versions"))
+        })
+}
+
+/// Builds the closing line for the `--fix` section, or `None` when nothing
+/// should be printed.
+///
+/// Distinguishes "no fixable issue was found" from "a fixable issue was
+/// found but every repair attempt failed or couldn't be attempted" - the
+/// two must never be conflated, since the latter already printed an
+/// explanatory error/warning line immediately above that a blanket "nothing
+/// to auto-fix" would directly contradict.
+fn fix_outcome_message(attempted_any: bool, fixed_any: bool) -> Option<String> {
+    if !attempted_any {
+        Some(format!("{} Nothing to auto-fix.", "i".cyan()))
+    } else if !fixed_any {
+        Some(format!(
+            "{} Found fixable issue(s), but could not repair any of them - see above.",
+            "!".yellow()
+        ))
+    } else {
+        None
+    }
+}
 
 fn ok(msg: &str) {
     println!("  {} {msg}", "✓".green());
@@ -438,6 +480,73 @@ mod tests {
         let go = dir.join(go_name);
         std::fs::write(&go, b"").unwrap();
         go
+    }
+
+    #[test]
+    fn read_local_pin_returns_none_when_neither_file_present() {
+        let dir = tempdir().unwrap();
+        assert_eq!(read_local_pin(dir.path()), None);
+    }
+
+    #[test]
+    fn read_local_pin_reads_go_version_file() {
+        let dir = tempdir().unwrap();
+        std::fs::write(dir.path().join(".go-version"), "go1.22.4").unwrap();
+        assert_eq!(
+            read_local_pin(dir.path()),
+            Some(("go1.22.4".to_string(), ".go-version"))
+        );
+    }
+
+    #[test]
+    fn read_local_pin_falls_back_to_tool_versions_golang_line() {
+        let dir = tempdir().unwrap();
+        std::fs::write(dir.path().join(".tool-versions"), "golang 1.22.4\n").unwrap();
+        assert_eq!(
+            read_local_pin(dir.path()),
+            Some(("1.22.4".to_string(), ".tool-versions"))
+        );
+    }
+
+    #[test]
+    fn read_local_pin_prefers_go_version_over_tool_versions() {
+        let dir = tempdir().unwrap();
+        std::fs::write(dir.path().join(".go-version"), "go1.21.13").unwrap();
+        std::fs::write(dir.path().join(".tool-versions"), "golang 1.22.4\n").unwrap();
+        assert_eq!(
+            read_local_pin(dir.path()),
+            Some(("go1.21.13".to_string(), ".go-version"))
+        );
+    }
+
+    #[test]
+    fn read_local_pin_ignores_tool_versions_without_a_golang_line() {
+        let dir = tempdir().unwrap();
+        std::fs::write(dir.path().join(".tool-versions"), "nodejs 20.11.0\n").unwrap();
+        assert_eq!(read_local_pin(dir.path()), None);
+    }
+
+    #[test]
+    fn fix_outcome_message_is_none_when_a_fix_succeeded() {
+        assert_eq!(fix_outcome_message(true, true), None);
+    }
+
+    #[test]
+    fn fix_outcome_message_reports_nothing_to_fix_when_nothing_was_attempted() {
+        let msg = fix_outcome_message(false, false).unwrap();
+        assert!(msg.contains("Nothing to auto-fix"));
+    }
+
+    #[test]
+    fn fix_outcome_message_never_says_nothing_to_fix_when_an_attempt_was_made() {
+        // Regression test: an issue was found and an attempt was made (or
+        // could not even be attempted, e.g. no shell detected), but nothing
+        // was actually fixed. The message must explain that, not claim
+        // there was nothing to fix - which would directly contradict the
+        // error/warning line already printed above it.
+        let msg = fix_outcome_message(true, false).unwrap();
+        assert!(!msg.contains("Nothing to auto-fix"));
+        assert!(msg.contains("could not repair"));
     }
 
     #[test]
