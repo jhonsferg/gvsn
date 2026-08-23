@@ -16,7 +16,11 @@ use colored::Colorize;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use crate::{config::Config, lock, prompt, toolchain, version::GoVersion};
+use crate::{
+    config::Config,
+    lock, prompt, toolchain,
+    version::{parse_tool_versions_golang_line, GoVersion, GO_VERSION_FILE, TOOL_VERSIONS_FILE},
+};
 
 /// Finds and removes unreferenced installed Go versions.
 ///
@@ -155,13 +159,24 @@ pub fn run(config: &Config, force: bool, dry_run: bool, scan_dir: Option<&str>) 
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/// If `dir` contains a `.go-version` file with a valid version, inserts the
-/// tag into `referenced`.
+/// If `dir` contains a `.go-version` file with a valid version, or (as an
+/// asdf-compatible fallback) a `.tool-versions` file with a valid `golang`
+/// line, inserts the tag into `referenced`.
 fn collect_go_version_file(dir: &Path, referenced: &mut HashSet<String>) {
-    let vf = dir.join(".go-version");
+    let vf = dir.join(GO_VERSION_FILE);
     if let Ok(raw) = std::fs::read_to_string(&vf) {
         if let Ok(v) = GoVersion::parse(raw.trim()) {
             referenced.insert(v.tag());
+            return;
+        }
+    }
+
+    let tv = dir.join(TOOL_VERSIONS_FILE);
+    if let Ok(content) = std::fs::read_to_string(&tv) {
+        if let Some(raw) = parse_tool_versions_golang_line(&content) {
+            if let Ok(v) = GoVersion::parse(raw) {
+                referenced.insert(v.tag());
+            }
         }
     }
 }
@@ -252,6 +267,26 @@ mod tests {
         let mut set = HashSet::new();
         collect_go_version_file(dir.path(), &mut set);
         assert!(set.is_empty());
+    }
+
+    #[test]
+    fn collect_reads_golang_line_from_tool_versions_when_go_version_absent() {
+        let dir = tmp();
+        fs::write(dir.path().join(".tool-versions"), "golang 1.22.4\n").unwrap();
+        let mut set = HashSet::new();
+        collect_go_version_file(dir.path(), &mut set);
+        assert!(set.contains("go1.22.4"));
+    }
+
+    #[test]
+    fn collect_prefers_go_version_over_tool_versions() {
+        let dir = tmp();
+        fs::write(dir.path().join(".go-version"), "go1.21.13").unwrap();
+        fs::write(dir.path().join(".tool-versions"), "golang 1.22.4\n").unwrap();
+        let mut set = HashSet::new();
+        collect_go_version_file(dir.path(), &mut set);
+        assert!(set.contains("go1.21.13"));
+        assert!(!set.contains("go1.22.4"));
     }
 
     #[test]
