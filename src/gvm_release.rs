@@ -60,13 +60,20 @@ pub fn fetch_latest_version(timeout: Duration) -> Result<String> {
 
 /// Parses a `"MAJOR.MINOR.PATCH"` string into a comparable tuple.
 ///
-/// Returns `None` when the string does not match the expected format.
+/// Returns `None` when the string does not have exactly three dot-separated
+/// components or any of them is not a valid unsigned integer. Components are
+/// validated strictly (not skipped) so a stray pre-release suffix like
+/// `"1.2.3-beta.1"` is rejected instead of silently mis-parsed as `(1, 2, 1)`.
 pub fn parse_semver(s: &str) -> Option<(u32, u32, u32)> {
-    let mut parts = s.split('.').filter_map(|p| p.parse::<u32>().ok());
-    let major = parts.next()?;
-    let minor = parts.next()?;
-    let patch = parts.next()?;
-    Some((major, minor, patch))
+    let parts: Vec<&str> = s.split('.').collect();
+    match parts.as_slice() {
+        [major, minor, patch] => Some((
+            major.parse().ok()?,
+            minor.parse().ok()?,
+            patch.parse().ok()?,
+        )),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -80,6 +87,15 @@ mod tests {
         assert_eq!(parse_semver("10.0.0"), Some((10, 0, 0)));
         assert_eq!(parse_semver("bad"), None);
         assert_eq!(parse_semver("1.2"), None);
+    }
+
+    #[test]
+    fn semver_rejects_invalid_middle_segment_instead_of_skipping_it() {
+        // A stray pre-release-style segment must invalidate the whole parse,
+        // not be silently dropped and shift the remaining numbers into the
+        // wrong positions.
+        assert_eq!(parse_semver("1.2.3-beta.1"), None);
+        assert_eq!(parse_semver("1.x.2.3"), None);
     }
 
     #[test]
