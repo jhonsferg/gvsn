@@ -7,13 +7,21 @@
 
 use anyhow::Result;
 use colored::Colorize;
+use serde::Serialize;
 
 use crate::{
-    config::Config,
+    config::{Config, ConfigMut},
     http::HttpClient,
     remote::{index, release::Release},
     toolchain,
 };
+
+/// One available release as reported by `--json`.
+#[derive(Serialize)]
+struct RemoteVersion {
+    version: String,
+    installed: bool,
+}
 
 /// Fetches the go.dev release index and prints available stable versions.
 ///
@@ -24,16 +32,43 @@ use crate::{
 /// Versions already installed locally are prefixed with `✓` to distinguish
 /// them from versions available for download.
 ///
+/// When `json` is `true`, prints a JSON array of `{"version", "installed"}`
+/// objects instead (still respecting `all`), with the "Fetching..." progress
+/// line sent to stderr so stdout stays valid JSON.
+///
 /// # Errors
 ///
-/// Returns an error if the remote release index cannot be fetched.
-pub fn run(config: &Config, client: &HttpClient, all: bool) -> Result<()> {
-    println!("{} Fetching available Go versions...", "->".cyan());
+/// Returns an error if the remote release index cannot be fetched, or
+/// (`json` only) if the result cannot be serialised.
+pub fn run(config: &Config, client: &HttpClient, all: bool, json: bool) -> Result<()> {
+    // Ensures `config.root` exists before `fetch_releases` tries to write the
+    // release-index cache there - otherwise the write silently fails (its
+    // errors are intentionally swallowed) on a machine that hasn't run
+    // `install`/`build` yet, and the cache never gets created.
+    config.ensure_dirs()?;
 
-    let releases = index::fetch_releases(client)?;
+    if json {
+        eprintln!("{} Fetching available Go versions...", "->".cyan());
+    } else {
+        println!("{} Fetching available Go versions...", "->".cyan());
+    }
+
+    let releases = index::fetch_releases(client, &config.root)?;
     let installed = toolchain::list_installed(config)?;
 
     let to_show = releases_to_show(&releases, all);
+
+    if json {
+        let entries: Vec<RemoteVersion> = to_show
+            .iter()
+            .map(|r| RemoteVersion {
+                version: r.version.clone(),
+                installed: installed.iter().any(|v| v.tag() == r.version),
+            })
+            .collect();
+        println!("{}", serde_json::to_string(&entries)?);
+        return Ok(());
+    }
 
     println!(
         "Available Go versions{}:",
@@ -89,6 +124,26 @@ fn releases_to_show(releases: &[Release], all: bool) -> Vec<&Release> {
 mod tests {
     use super::*;
     use crate::remote::release::ReleaseFile;
+    use tempfile::tempdir;
+
+    #[test]
+    fn run_creates_gvm_root_before_fetching() {
+        // config.root does not exist yet (only the tempdir it lives under
+        // does) - regression test for the fix that ensures `ensure_dirs()`
+        // runs before `fetch_releases` tries to write the release-index
+        // cache there. The network fetch itself may fail in a sandboxed test
+        // environment; only `tmp_dir()` existing afterward proves
+        // `ensure_dirs()` ran (nothing else in `run` creates it).
+        let dir = tempdir().unwrap();
+        let config = Config {
+            root: dir.path().join("not-created-yet"),
+        };
+        let client = HttpClient::new(false, 0).unwrap();
+
+        let _ = run(&config, &client, false, false);
+
+        assert!(config.tmp_dir().exists());
+    }
 
     fn release(version: &str, stable: bool) -> Release {
         Release {

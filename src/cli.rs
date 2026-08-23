@@ -149,7 +149,11 @@ pub enum Command {
     },
 
     /// List all locally installed Go versions.
-    List,
+    List {
+        /// Print the list as JSON instead of formatted text, for scripting.
+        #[arg(long)]
+        json: bool,
+    },
 
     /// List available Go versions from go.dev.
     #[command(name = "list-remote")]
@@ -157,6 +161,10 @@ pub enum Command {
         /// Show every patch release instead of only the latest patch per minor.
         #[arg(long)]
         all: bool,
+
+        /// Print the list as JSON instead of formatted text, for scripting.
+        #[arg(long)]
+        json: bool,
     },
 
     /// Print the currently active Go version and its source.
@@ -239,6 +247,11 @@ pub enum Command {
         /// Target shell for profile check. Auto-detected when omitted.
         #[arg(long)]
         shell: Option<String>,
+
+        /// Automatically repair fixable issues (missing/stale shell hook,
+        /// missing `~/.gvm/current` link) instead of only reporting them.
+        #[arg(long)]
+        fix: bool,
     },
 
     /// Print a shell completion script to stdout.
@@ -254,7 +267,11 @@ pub enum Command {
     /// Queries go.dev and compares each locally installed version against the
     /// latest available patch for the same major.minor line. Versions that are
     /// behind are highlighted so you can decide whether to update or remove them.
-    Outdated,
+    Outdated {
+        /// Print the report as JSON instead of formatted text, for scripting.
+        #[arg(long)]
+        json: bool,
+    },
 
     /// Remove installed Go versions that are no longer referenced.
     ///

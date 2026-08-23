@@ -3,6 +3,8 @@
 //! This module is the single point of contact with the remote API. All network
 //! requests made by `gvm` go through [`fetch_releases`].
 
+use std::path::Path;
+
 use anyhow::{Context, Result};
 
 use crate::{http::HttpClient, remote::release::Release, user_version::VersionSpec};
@@ -10,19 +12,61 @@ use crate::{http::HttpClient, remote::release::Release, user_version::VersionSpe
 /// URL of the go.dev download API that lists all releases.
 const GO_DL_API: &str = "https://go.dev/dl/?mode=json&include=all";
 
-/// Downloads the complete list of Go releases from go.dev.
+/// Cache file name, relative to the gvm root directory (`GVM_DIR`).
+const CACHE_FILE: &str = "release-index.json";
+
+/// How long a cached release index is trusted before a fresh fetch is made.
+///
+/// Short enough that a newly published release is picked up the same day,
+/// long enough that running `list-remote`, `outdated`, and `install` back to
+/// back - a common sequence - only pays the network+parse cost once.
+const CACHE_TTL_SECS: u64 = 60 * 60;
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct ReleaseCache {
+    last_checked_unix: u64,
+    releases: Vec<Release>,
+}
+
+/// Returns the complete list of Go releases from go.dev, from a local cache
+/// when one exists and is younger than [`CACHE_TTL_SECS`], or a fresh network
+/// fetch otherwise.
 ///
 /// The API returns both stable and unstable (RC/beta) releases; callers are
 /// responsible for filtering by [`Release::stable`] if needed.
 ///
-/// When verbose mode is active, the request and response details are printed
-/// to stderr before the JSON body is parsed.
-///
 /// # Errors
 ///
-/// Returns an error if the HTTP request fails or if the response body cannot
-/// be deserialised as JSON.
-pub fn fetch_releases(client: &HttpClient) -> Result<Vec<Release>> {
+/// Returns an error if the cache is stale/missing and the HTTP request fails
+/// or the response body cannot be deserialised as JSON. A cache that exists
+/// but cannot be read or parsed is treated the same as a missing one - it is
+/// silently replaced by a fresh fetch rather than failing the command.
+pub fn fetch_releases(client: &HttpClient, root: &Path) -> Result<Vec<Release>> {
+    let cache_path = root.join(CACHE_FILE);
+    let now = now_unix();
+
+    if let Some(cache) = load_cache(&cache_path) {
+        if !is_stale(cache.last_checked_unix, now) {
+            return Ok(cache.releases);
+        }
+    }
+
+    let releases = fetch_releases_uncached(client)?;
+    let _ = save_cache(
+        &cache_path,
+        &ReleaseCache {
+            last_checked_unix: now,
+            releases: releases.clone(),
+        },
+    );
+    Ok(releases)
+}
+
+/// Performs the actual network request and JSON parse, bypassing the cache.
+///
+/// When verbose mode is active, the request and response details are printed
+/// to stderr before the JSON body is parsed.
+fn fetch_releases_uncached(client: &HttpClient) -> Result<Vec<Release>> {
     crate::http::log_request(client, "GET", GO_DL_API);
 
     let mut response = client
@@ -42,6 +86,29 @@ pub fn fetch_releases(client: &HttpClient) -> Result<Vec<Release>> {
         .body_mut()
         .read_json::<Vec<Release>>()
         .context("Failed to parse Go releases JSON")
+}
+
+fn load_cache(path: &Path) -> Option<ReleaseCache> {
+    let content = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&content).ok()
+}
+
+fn save_cache(path: &Path, cache: &ReleaseCache) -> std::io::Result<()> {
+    let content = serde_json::to_string(cache).unwrap_or_default();
+    std::fs::write(path, content)
+}
+
+/// Returns `true` when a cache written at `last_checked_unix` is old enough
+/// (relative to `now`) that a fresh fetch should be made.
+fn is_stale(last_checked_unix: u64, now: u64) -> bool {
+    now.saturating_sub(last_checked_unix) >= CACHE_TTL_SECS
+}
+
+fn now_unix() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 /// Resolves a [`VersionSpec`] to the best-matching stable [`Release`].
@@ -118,6 +185,71 @@ pub fn host_arch() -> &'static str {
 mod tests {
     use super::*;
     use crate::remote::release::{Release, ReleaseFile};
+    use tempfile::tempdir;
+
+    #[test]
+    fn is_stale_before_ttl_is_false() {
+        assert!(!is_stale(1000, 1000 + CACHE_TTL_SECS - 1));
+    }
+
+    #[test]
+    fn is_stale_at_or_after_ttl_is_true() {
+        assert!(is_stale(1000, 1000 + CACHE_TTL_SECS));
+    }
+
+    #[test]
+    fn is_stale_handles_clock_going_backwards() {
+        assert!(!is_stale(1000, 500));
+    }
+
+    #[test]
+    fn cache_round_trips_through_disk() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join(CACHE_FILE);
+
+        let cache = ReleaseCache {
+            last_checked_unix: 12345,
+            releases: vec![release("go1.22.4", true)],
+        };
+        save_cache(&path, &cache).unwrap();
+
+        let loaded = load_cache(&path).unwrap();
+        assert_eq!(loaded.last_checked_unix, 12345);
+        assert_eq!(loaded.releases.len(), 1);
+        assert_eq!(loaded.releases[0].version, "go1.22.4");
+    }
+
+    #[test]
+    fn load_cache_returns_none_when_missing_or_corrupt() {
+        let dir = tempdir().unwrap();
+        assert!(load_cache(&dir.path().join("missing.json")).is_none());
+
+        let corrupt = dir.path().join("corrupt.json");
+        std::fs::write(&corrupt, "not json").unwrap();
+        assert!(load_cache(&corrupt).is_none());
+    }
+
+    #[test]
+    fn fetch_releases_uses_fresh_cache_without_a_network_call() {
+        // Regression guard: this must succeed with no real network access,
+        // proving `fetch_releases` returned the cached list instead of
+        // trying `fetch_releases_uncached`.
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join(CACHE_FILE);
+        save_cache(
+            &cache_path,
+            &ReleaseCache {
+                last_checked_unix: now_unix(),
+                releases: vec![release("go1.22.4", true)],
+            },
+        )
+        .unwrap();
+
+        let client = crate::http::HttpClient::new(false, 0).unwrap();
+        let releases = fetch_releases(&client, dir.path()).unwrap();
+        assert_eq!(releases.len(), 1);
+        assert_eq!(releases[0].version, "go1.22.4");
+    }
 
     fn release(version: &str, stable: bool) -> Release {
         Release {

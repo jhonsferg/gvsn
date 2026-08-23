@@ -57,7 +57,7 @@ pub fn run(
     // Resolve version against the remote index.
     let spec = VersionSpec::parse(version_str)?;
     println!("{} Fetching available Go versions...", "->".cyan());
-    let releases = index::fetch_releases(client)?;
+    let releases = index::fetch_releases(client, &config.root)?;
     let release = index::resolve(&spec, &releases)?;
     let version = release
         .go_version()

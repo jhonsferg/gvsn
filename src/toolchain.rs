@@ -11,12 +11,18 @@
 use anyhow::{bail, Context, Result};
 use std::path::PathBuf;
 
-use crate::{config::Config, fs as gvm_fs, lock, user_version::VersionSpec, version::GoVersion};
+use crate::{
+    config::Config,
+    fs as gvm_fs, lock,
+    user_version::VersionSpec,
+    version::{parse_tool_versions_golang_line, GoVersion, GO_VERSION_FILE, TOOL_VERSIONS_FILE},
+};
 
 /// Indicates where the active version was determined from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VersionSource {
-    /// Activated by a `.go-version` file found in the current directory tree.
+    /// Activated by a `.go-version` or `.tool-versions` file found in the
+    /// current directory tree.
     Local,
     /// Activated by the global default stored in `~/.gvm/version`.
     Global,
@@ -26,7 +32,7 @@ impl VersionSource {
     /// Returns a human-readable label suitable for display.
     pub fn label(self) -> &'static str {
         match self {
-            Self::Local => "local (.go-version)",
+            Self::Local => "local (.go-version/.tool-versions)",
             Self::Global => "global",
         }
     }
@@ -88,25 +94,39 @@ pub fn global_version(config: &Config) -> Result<GoVersion> {
 /// The resolution order is:
 ///
 /// 1. Walk up from the current working directory looking for `.go-version`
+///    (gvm's own pin file), then the asdf-compatible `.tool-versions` file
 ///    (up to 20 levels to avoid infinite loops on unusual file systems).
 /// 2. Fall back to the global default stored in `~/.gvm/version`.
 ///
 /// # Errors
 ///
 /// Returns an error if the current directory cannot be read, if a
-/// `.go-version` file contains an invalid version string, or if no global
-/// version has been set.
+/// `.go-version` file or a `.tool-versions` file's `golang` line contains an
+/// invalid version string, or if no global version has been set.
 pub fn active_version(config: &Config) -> Result<(GoVersion, VersionSource)> {
     let mut dir = std::env::current_dir()?;
     let mut depth = 0u8;
 
     loop {
-        let vf = dir.join(".go-version");
-        if vf.exists() {
-            let raw = std::fs::read_to_string(&vf)?.trim().to_string();
-            let v = GoVersion::parse(&raw).context("Corrupted .go-version")?;
+        let go_version_path = dir.join(GO_VERSION_FILE);
+        if go_version_path.exists() {
+            let raw = std::fs::read_to_string(&go_version_path)
+                .with_context(|| format!("Cannot read {}", go_version_path.display()))?;
+            let v = GoVersion::parse(raw.trim()).context("Corrupted .go-version")?;
             return Ok((v, VersionSource::Local));
         }
+
+        let tool_versions_path = dir.join(TOOL_VERSIONS_FILE);
+        if tool_versions_path.exists() {
+            let content = std::fs::read_to_string(&tool_versions_path)
+                .with_context(|| format!("Cannot read {}", tool_versions_path.display()))?;
+            if let Some(raw) = parse_tool_versions_golang_line(&content) {
+                let v =
+                    GoVersion::parse(raw).context("Corrupted golang entry in .tool-versions")?;
+                return Ok((v, VersionSource::Local));
+            }
+        }
+
         // Stop if we have reached the file-system root or the depth limit.
         if depth >= 20 || !dir.pop() {
             break;
@@ -359,7 +379,10 @@ mod tests {
 
     #[test]
     fn version_source_label_text() {
-        assert_eq!(VersionSource::Local.label(), "local (.go-version)");
+        assert_eq!(
+            VersionSource::Local.label(),
+            "local (.go-version/.tool-versions)"
+        );
         assert_eq!(VersionSource::Global.label(), "global");
     }
 }

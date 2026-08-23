@@ -10,33 +10,46 @@
 //! 2. A global Go version has been set.
 //! 3. The global version is installed on disk.
 //! 4. `GOROOT` resolves to the correct directory.
-//! 5. The current directory's `.go-version` (if present) refers to an
-//!    installed version.
+//! 5. The current directory's `.go-version` or `.tool-versions` (if present)
+//!    refers to an installed version.
 //! 6. The `gvm env` hook is present in the detected shell's profile.
 //! 7. Only one `go` binary is active in `PATH` and it is gvm-managed.
 
 use anyhow::Result;
 use colored::Colorize;
 
-use crate::{config::Config, shell, toolchain};
+use crate::{commands::setup, config::Config, shell, toolchain, version::GoVersion};
 
 /// Runs all environment checks and prints a summary.
 ///
 /// When `shell_str` is provided it overrides shell auto-detection for the
 /// profile check. The function exits the process with code `1` if any issue
-/// is found.
+/// remains after checking (and, if `fix` is `true`, after attempting repairs).
+///
+/// When `fix` is `true`, two classes of issue are repaired automatically
+/// after the checks run:
+/// - A missing/stale shell hook or missing PATH entry (checks 1 and 7) is
+///   fixed by running the same logic as `gvm setup`.
+/// - A missing `~/.gvm/current` junction (check 5) is recreated by
+///   re-pointing it at the installed global version, if one is set.
+///
+/// Everything else (an uninstalled global version, a `.go-version` pointing
+/// at an uninstalled version, a shadowed non-gvm `go` on `PATH`) requires a
+/// choice only the user can make (which version, whether to uninstall
+/// something) and is never auto-fixed.
 ///
 /// # Errors
 ///
 /// This function only returns `Err` for unexpected I/O failures. Diagnostic
 /// failures are reported to stdout and tracked in the `issues` counter rather
 /// than being propagated as errors.
-pub fn run(config: &Config, shell_str: Option<&str>) -> Result<()> {
+pub fn run(config: &Config, shell_str: Option<&str>, fix: bool) -> Result<()> {
     println!("Checking gvm environment...\n");
     let mut issues = 0u32;
     let go_name = if cfg!(windows) { "go.exe" } else { "go" };
 
     // ---- Check 1: gvm binary on PATH ----------------------------------------
+    let mut path_issue = false;
     if shell::gvm_in_path() {
         ok("gvm binary is in PATH");
     } else {
@@ -46,9 +59,11 @@ pub fn run(config: &Config, shell_str: Option<&str>) -> Result<()> {
             .unwrap_or_else(|| "<unknown>".to_string());
         fail(&format!("gvm is NOT in PATH  (add '{dir}' to your PATH)"));
         issues += 1;
+        path_issue = true;
     }
 
     // ---- Check 2 & 3: global version set and installed ----------------------
+    let mut installed_global: Option<GoVersion> = None;
     match toolchain::global_version(config) {
         Err(_) => {
             fail("No global Go version set  (run 'gvm use <version>')");
@@ -63,6 +78,7 @@ pub fn run(config: &Config, shell_str: Option<&str>) -> Result<()> {
                 // ---- Check 4: GOROOT directory exists -----------------------
                 let root = config.version_dir(&v.tag());
                 ok(&format!("GOROOT -> {}", root.display()));
+                installed_global = Some(v);
             } else {
                 fail(&format!(
                     "{} is NOT installed  (run 'gvm install {}')",
@@ -81,7 +97,8 @@ pub fn run(config: &Config, shell_str: Option<&str>) -> Result<()> {
     // binary. Warn them so `go` works in CMD, Git Bash and editors.
     let current_dir = config.current_dir();
     let current_go = current_dir.join("bin").join(go_name);
-    if current_go.exists() {
+    let current_link_missing = !current_go.exists();
+    if !current_link_missing {
         ok(&format!(
             "~/.gvm/current junction is configured ({})",
             current_dir.display()
@@ -91,29 +108,23 @@ pub fn run(config: &Config, shell_str: Option<&str>) -> Result<()> {
         issues += 1;
     }
 
-    // ---- Check 6: local .go-version consistency -----------------------------
+    // ---- Check 6: local pin file (.go-version / .tool-versions) consistency -
     if let Ok(cwd) = std::env::current_dir() {
-        let vf = cwd.join(".go-version");
-        if vf.exists() {
-            let raw = std::fs::read_to_string(&vf)
-                .unwrap_or_default()
-                .trim()
-                .to_string();
-
+        if let Some((raw, source)) = read_local_pin(&cwd) {
             match crate::version::GoVersion::parse(&raw) {
                 Ok(v) if toolchain::is_installed(config, &v) => {
-                    ok(&format!(".go-version = {} (installed)", v.tag()));
+                    ok(&format!("{source} = {} (installed)", v.tag()));
                 }
                 Ok(v) => {
                     warn(&format!(
-                        ".go-version = {} but NOT installed  (run 'gvm install {}')",
+                        "{source} = {} but NOT installed  (run 'gvm install {}')",
                         v.tag(),
                         v.tag()
                     ));
                     issues += 1;
                 }
                 Err(_) => {
-                    warn(&format!(".go-version contains invalid version: '{raw}'"));
+                    warn(&format!("{source} contains invalid version: '{raw}'"));
                     issues += 1;
                 }
             }
@@ -126,7 +137,8 @@ pub fn run(config: &Config, shell_str: Option<&str>) -> Result<()> {
         None => shell::detect(),
     };
 
-    if let Some(sh) = sh {
+    let mut profile_issue = false;
+    if let Some(sh) = &sh {
         match sh.profile_path() {
             None => warn(&format!("Cannot determine profile path for {}", sh.name())),
             Some(profile) => {
@@ -140,6 +152,7 @@ pub fn run(config: &Config, shell_str: Option<&str>) -> Result<()> {
                             profile.display()
                         ));
                         issues += 1;
+                        profile_issue = true;
                     }
                 } else {
                     fail(&format!(
@@ -147,6 +160,7 @@ pub fn run(config: &Config, shell_str: Option<&str>) -> Result<()> {
                         profile.display()
                     ));
                     issues += 1;
+                    profile_issue = true;
                 }
             }
         }
@@ -222,6 +236,75 @@ pub fn run(config: &Config, shell_str: Option<&str>) -> Result<()> {
         }
     }
 
+    // ---- Auto-fix -------------------------------------------------------------
+    if fix {
+        // Tracks whether any fixable issue was found at all, separately from
+        // whether a fix actually succeeded - so the closing message can tell
+        // "nothing needed fixing" apart from "something needed fixing, but
+        // the attempt failed or couldn't be attempted", which must never be
+        // reported as "nothing to auto-fix" right below the error explaining
+        // why it wasn't fixed.
+        let mut attempted_any = false;
+        let mut fixed_any = false;
+        println!();
+
+        if path_issue || profile_issue {
+            attempted_any = true;
+            match &sh {
+                Some(sh) => match setup::run(Some(sh.name()), false) {
+                    Ok(()) => {
+                        println!("  {} Ran 'gvm setup' for {}.", "->".cyan(), sh.name());
+                        if profile_issue {
+                            println!("    Shell profile hook fixed.");
+                            issues = issues.saturating_sub(1);
+                        }
+                        if path_issue {
+                            println!(
+                                "    PATH updated - open a new shell session for it to take effect."
+                            );
+                        }
+                        fixed_any = true;
+                    }
+                    Err(e) => {
+                        println!("  {} Could not run 'gvm setup': {e:#}", "x".red());
+                    }
+                },
+                None => {
+                    println!(
+                        "  {} Cannot auto-fix PATH/shell hook: no shell detected.",
+                        "!".yellow()
+                    );
+                }
+            }
+        }
+
+        if current_link_missing {
+            attempted_any = true;
+            match &installed_global {
+                Some(v) => match toolchain::set_active_version(config, v) {
+                    Ok(()) => {
+                        println!("  {} Recreated ~/.gvm/current -> {}", "->".cyan(), v.tag());
+                        issues = issues.saturating_sub(1);
+                        fixed_any = true;
+                    }
+                    Err(e) => {
+                        println!("  {} Could not recreate ~/.gvm/current: {e:#}", "x".red());
+                    }
+                },
+                None => {
+                    println!(
+                        "  {} Cannot auto-fix ~/.gvm/current: no installed global version set.",
+                        "!".yellow()
+                    );
+                }
+            }
+        }
+
+        if let Some(msg) = fix_outcome_message(attempted_any, fixed_any) {
+            println!("  {msg}");
+        }
+    }
+
     // ---- Summary ------------------------------------------------------------
     println!();
     if issues == 0 {
@@ -235,6 +318,54 @@ pub fn run(config: &Config, shell_str: Option<&str>) -> Result<()> {
 }
 
 // --- Private helpers ---------------------------------------------------------
+
+/// Resolves the local version pin for `dir`, checking `.go-version` first and
+/// falling back to the `golang` line of `.tool-versions`. Returns the raw
+/// (untrimmed-source, but trimmed here) version string paired with the name
+/// of the file it came from, or `None` when neither file pins a version.
+///
+/// Mirrors [`toolchain::active_version`]'s precedence, but for a single
+/// directory (check 6 only cares about the current directory, not the
+/// walk-up-to-root resolution `active_version` does) and without the "must
+/// error on unreadable file" strictness that function needs - a doctor check
+/// is diagnostic, not a resolution path something else depends on.
+fn read_local_pin(dir: &std::path::Path) -> Option<(String, &'static str)> {
+    let go_version_path = dir.join(crate::version::GO_VERSION_FILE);
+    if go_version_path.exists() {
+        return std::fs::read_to_string(&go_version_path)
+            .ok()
+            .map(|raw| (raw.trim().to_string(), ".go-version"));
+    }
+
+    let tool_versions_path = dir.join(crate::version::TOOL_VERSIONS_FILE);
+    std::fs::read_to_string(&tool_versions_path)
+        .ok()
+        .and_then(|content| {
+            crate::version::parse_tool_versions_golang_line(&content)
+                .map(|raw| (raw.to_string(), ".tool-versions"))
+        })
+}
+
+/// Builds the closing line for the `--fix` section, or `None` when nothing
+/// should be printed.
+///
+/// Distinguishes "no fixable issue was found" from "a fixable issue was
+/// found but every repair attempt failed or couldn't be attempted" - the
+/// two must never be conflated, since the latter already printed an
+/// explanatory error/warning line immediately above that a blanket "nothing
+/// to auto-fix" would directly contradict.
+fn fix_outcome_message(attempted_any: bool, fixed_any: bool) -> Option<String> {
+    if !attempted_any {
+        Some(format!("{} Nothing to auto-fix.", "i".cyan()))
+    } else if !fixed_any {
+        Some(format!(
+            "{} Found fixable issue(s), but could not repair any of them - see above.",
+            "!".yellow()
+        ))
+    } else {
+        None
+    }
+}
 
 fn ok(msg: &str) {
     println!("  {} {msg}", "✓".green());
@@ -349,6 +480,73 @@ mod tests {
         let go = dir.join(go_name);
         std::fs::write(&go, b"").unwrap();
         go
+    }
+
+    #[test]
+    fn read_local_pin_returns_none_when_neither_file_present() {
+        let dir = tempdir().unwrap();
+        assert_eq!(read_local_pin(dir.path()), None);
+    }
+
+    #[test]
+    fn read_local_pin_reads_go_version_file() {
+        let dir = tempdir().unwrap();
+        std::fs::write(dir.path().join(".go-version"), "go1.22.4").unwrap();
+        assert_eq!(
+            read_local_pin(dir.path()),
+            Some(("go1.22.4".to_string(), ".go-version"))
+        );
+    }
+
+    #[test]
+    fn read_local_pin_falls_back_to_tool_versions_golang_line() {
+        let dir = tempdir().unwrap();
+        std::fs::write(dir.path().join(".tool-versions"), "golang 1.22.4\n").unwrap();
+        assert_eq!(
+            read_local_pin(dir.path()),
+            Some(("1.22.4".to_string(), ".tool-versions"))
+        );
+    }
+
+    #[test]
+    fn read_local_pin_prefers_go_version_over_tool_versions() {
+        let dir = tempdir().unwrap();
+        std::fs::write(dir.path().join(".go-version"), "go1.21.13").unwrap();
+        std::fs::write(dir.path().join(".tool-versions"), "golang 1.22.4\n").unwrap();
+        assert_eq!(
+            read_local_pin(dir.path()),
+            Some(("go1.21.13".to_string(), ".go-version"))
+        );
+    }
+
+    #[test]
+    fn read_local_pin_ignores_tool_versions_without_a_golang_line() {
+        let dir = tempdir().unwrap();
+        std::fs::write(dir.path().join(".tool-versions"), "nodejs 20.11.0\n").unwrap();
+        assert_eq!(read_local_pin(dir.path()), None);
+    }
+
+    #[test]
+    fn fix_outcome_message_is_none_when_a_fix_succeeded() {
+        assert_eq!(fix_outcome_message(true, true), None);
+    }
+
+    #[test]
+    fn fix_outcome_message_reports_nothing_to_fix_when_nothing_was_attempted() {
+        let msg = fix_outcome_message(false, false).unwrap();
+        assert!(msg.contains("Nothing to auto-fix"));
+    }
+
+    #[test]
+    fn fix_outcome_message_never_says_nothing_to_fix_when_an_attempt_was_made() {
+        // Regression test: an issue was found and an attempt was made (or
+        // could not even be attempted, e.g. no shell detected), but nothing
+        // was actually fixed. The message must explain that, not claim
+        // there was nothing to fix - which would directly contradict the
+        // error/warning line already printed above it.
+        let msg = fix_outcome_message(true, false).unwrap();
+        assert!(!msg.contains("Nothing to auto-fix"));
+        assert!(msg.contains("could not repair"));
     }
 
     #[test]

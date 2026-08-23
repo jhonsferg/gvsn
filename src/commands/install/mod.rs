@@ -50,7 +50,7 @@ pub fn run(config: &Config, client: &HttpClient, spec_str: &str, force: bool) ->
     let spec = VersionSpec::parse(spec_str)?;
 
     println!("{} Fetching available Go versions...", "->".cyan());
-    let releases = index::fetch_releases(client)?;
+    let releases = index::fetch_releases(client, &config.root)?;
     let release = index::resolve(&spec, &releases)?;
 
     let version = release
