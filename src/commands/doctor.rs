@@ -10,8 +10,8 @@
 //! 2. A global Go version has been set.
 //! 3. The global version is installed on disk.
 //! 4. `GOROOT` resolves to the correct directory.
-//! 5. The current directory's `.go-version` (if present) refers to an
-//!    installed version.
+//! 5. The current directory's `.go-version` or `.tool-versions` (if present)
+//!    refers to an installed version.
 //! 6. The `gvm env` hook is present in the detected shell's profile.
 //! 7. Only one `go` binary is active in `PATH` and it is gvm-managed.
 
@@ -108,29 +108,38 @@ pub fn run(config: &Config, shell_str: Option<&str>, fix: bool) -> Result<()> {
         issues += 1;
     }
 
-    // ---- Check 6: local .go-version consistency -----------------------------
+    // ---- Check 6: local pin file (.go-version / .tool-versions) consistency -
     if let Ok(cwd) = std::env::current_dir() {
-        let vf = cwd.join(".go-version");
-        if vf.exists() {
-            let raw = std::fs::read_to_string(&vf)
-                .unwrap_or_default()
-                .trim()
-                .to_string();
+        let go_version_path = cwd.join(crate::version::GO_VERSION_FILE);
+        let pin = if go_version_path.exists() {
+            std::fs::read_to_string(&go_version_path)
+                .ok()
+                .map(|raw| (raw.trim().to_string(), ".go-version"))
+        } else {
+            let tool_versions_path = cwd.join(crate::version::TOOL_VERSIONS_FILE);
+            std::fs::read_to_string(&tool_versions_path)
+                .ok()
+                .and_then(|content| {
+                    crate::version::parse_tool_versions_golang_line(&content)
+                        .map(|raw| (raw.to_string(), ".tool-versions"))
+                })
+        };
 
+        if let Some((raw, source)) = pin {
             match crate::version::GoVersion::parse(&raw) {
                 Ok(v) if toolchain::is_installed(config, &v) => {
-                    ok(&format!(".go-version = {} (installed)", v.tag()));
+                    ok(&format!("{source} = {} (installed)", v.tag()));
                 }
                 Ok(v) => {
                     warn(&format!(
-                        ".go-version = {} but NOT installed  (run 'gvm install {}')",
+                        "{source} = {} but NOT installed  (run 'gvm install {}')",
                         v.tag(),
                         v.tag()
                     ));
                     issues += 1;
                 }
                 Err(_) => {
-                    warn(&format!(".go-version contains invalid version: '{raw}'"));
+                    warn(&format!("{source} contains invalid version: '{raw}'"));
                     issues += 1;
                 }
             }
