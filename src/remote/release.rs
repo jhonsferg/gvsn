@@ -6,10 +6,10 @@
 //! the API adds new fields.
 
 use crate::version::GoVersion;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// A single Go release as returned by the go.dev download API.
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Release {
     /// Canonical release tag, e.g. `"go1.22.4"`.
     pub version: String,
@@ -22,7 +22,7 @@ pub struct Release {
 }
 
 /// A single downloadable file within a [`Release`].
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[allow(dead_code)]
 pub struct ReleaseFile {
     /// Archive filename, e.g. `"go1.22.4.linux-amd64.tar.gz"`.
