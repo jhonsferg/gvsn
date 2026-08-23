@@ -22,6 +22,36 @@ pub struct GoVersion {
     pub patch: u32,
 }
 
+/// Filename gvm uses for its own per-project version pin, written by
+/// `gvm local` and checked first when resolving the active version.
+pub const GO_VERSION_FILE: &str = ".go-version";
+
+/// Filename asdf (and asdf-compatible tools) use for per-project version
+/// pins. Checked as a fallback when [`GO_VERSION_FILE`] is absent, so a
+/// project that already pins its Go version via asdf's `golang` plugin does
+/// not need a separate gvm-specific file.
+pub const TOOL_VERSIONS_FILE: &str = ".tool-versions";
+
+/// Extracts the version from the `golang` line of a `.tool-versions` file's
+/// contents (asdf format: `<tool> <version> [<fallback-version> ...]`, one
+/// tool per line, blank lines and `#` comments ignored).
+///
+/// Only the first version listed is returned - gvm has no concept of a
+/// fallback version list. Returns `None` when no `golang` line is present.
+pub fn parse_tool_versions_golang_line(content: &str) -> Option<&str> {
+    content.lines().find_map(|line| {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            return None;
+        }
+        let mut parts = line.split_whitespace();
+        if parts.next()? != "golang" {
+            return None;
+        }
+        parts.next()
+    })
+}
+
 impl GoVersion {
     /// Parses a version string into a [`GoVersion`].
     ///
@@ -92,5 +122,46 @@ impl Ord for GoVersion {
             .cmp(&other.major)
             .then(self.minor.cmp(&other.minor))
             .then(self.patch.cmp(&other.patch))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_tool_versions_finds_the_golang_line() {
+        let content = "nodejs 20.11.0\ngolang 1.22.4\npython 3.12.1\n";
+        assert_eq!(parse_tool_versions_golang_line(content), Some("1.22.4"));
+    }
+
+    #[test]
+    fn parse_tool_versions_takes_only_the_first_fallback_version() {
+        let content = "golang 1.22.4 1.21.9\n";
+        assert_eq!(parse_tool_versions_golang_line(content), Some("1.22.4"));
+    }
+
+    #[test]
+    fn parse_tool_versions_ignores_blank_lines_and_comments() {
+        let content = "\n# managed by asdf\n\ngolang 1.22.4\n";
+        assert_eq!(parse_tool_versions_golang_line(content), Some("1.22.4"));
+    }
+
+    #[test]
+    fn parse_tool_versions_ignores_tools_with_golang_as_a_prefix() {
+        // "golangci-lint" must not be mistaken for the "golang" plugin line.
+        let content = "golangci-lint 1.55.2\n";
+        assert_eq!(parse_tool_versions_golang_line(content), None);
+    }
+
+    #[test]
+    fn parse_tool_versions_returns_none_when_absent() {
+        let content = "nodejs 20.11.0\npython 3.12.1\n";
+        assert_eq!(parse_tool_versions_golang_line(content), None);
+    }
+
+    #[test]
+    fn parse_tool_versions_returns_none_for_empty_content() {
+        assert_eq!(parse_tool_versions_golang_line(""), None);
     }
 }
