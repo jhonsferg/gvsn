@@ -1,11 +1,11 @@
-//! `gvm exec` - run a command with a specific Go version.
+//! `gvsn exec` - run a command with a specific Go version.
 //!
 //! Resolves the requested version, prepends its `bin/` directory to `PATH`,
 //! sets `GOROOT`, and spawns the command as a child process. The global
 //! default version is not modified.
 //!
 //! The exit code of the child process is forwarded to the parent so that
-//! `gvm exec` is transparent to callers that inspect `$?` / `$LASTEXITCODE`.
+//! `gvsn exec` is transparent to callers that inspect `$?` / `$LASTEXITCODE`.
 
 use anyhow::{bail, Result};
 use colored::Colorize;
@@ -32,7 +32,7 @@ use crate::{config::Config, toolchain, user_version::VersionSpec};
 /// - The command cannot be spawned (e.g. not found on `PATH`).
 pub fn run(config: &Config, spec_str: &str, args: &[String]) -> Result<()> {
     if args.is_empty() {
-        bail!("No command specified. Usage: gvm exec <version> <command> [args...]");
+        bail!("No command specified. Usage: gvsn exec <version> <command> [args...]");
     }
 
     let spec = VersionSpec::parse(spec_str)?;
@@ -44,7 +44,7 @@ pub fn run(config: &Config, spec_str: &str, args: &[String]) -> Result<()> {
     let cmd_args = &args[1..];
 
     // Build a modified PATH that has the target version's bin/ first, with all
-    // previously gvm-managed entries left in place (they come after anyway).
+    // previously gvsn-managed entries left in place (they come after anyway).
     let path_var = std::env::var("PATH").unwrap_or_default();
     let sep = if cfg!(windows) { ";" } else { ":" };
     let new_path = format!("{}{sep}{path_var}", bin.display());

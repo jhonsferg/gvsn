@@ -5,7 +5,7 @@
 //! so that resolution - querying the remote index or the local store - stays in
 //! the caller rather than leaking into this type.
 //!
-//! The three variants cover every form accepted by `gvm`:
+//! The three variants cover every form accepted by `gvsn`:
 //!
 //! | User input | Variant                                   |
 //! |------------|-------------------------------------------|

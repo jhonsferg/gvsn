@@ -1,20 +1,20 @@
 [package]
-name = "gvm-rs"
+name = "gvsn"
 version = "1.5.1"
 edition = "2021"
 description = "A fast, cross-platform Go version manager written in Rust"
 license = "MIT"
-repository = "https://github.com/jhonsferg/gvm-rs"
-homepage = "https://github.com/jhonsferg/gvm-rs"
-keywords = ["go", "golang", "version-manager", "toolchain", "gvm"]
+repository = "https://github.com/jhonsferg/gvsn"
+homepage = "https://github.com/jhonsferg/gvsn"
+keywords = ["go", "golang", "version-manager", "toolchain", "gvsn"]
 categories = ["command-line-utilities", "development-tools"]
 
 [lib]
-name = "gvm_rs"
+name = "gvsn"
 path = "src/lib.rs"
 
 [[bin]]
-name = "gvm"
+name = "gvsn"
 path = "src/main.rs"
 
 [dependencies]

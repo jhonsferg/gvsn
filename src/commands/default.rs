@@ -1,4 +1,4 @@
-//! `gvm default` - alias for `gvm use`.
+//! `gvsn default` - alias for `gvsn use`.
 //!
 //! Provided for users familiar with tools like `nvm` or `rbenv` that use
 //! `default` instead of `use` for the same operation.

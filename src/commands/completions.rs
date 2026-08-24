@@ -1,4 +1,4 @@
-//! `gvm completions` - generate shell completion scripts.
+//! `gvsn completions` - generate shell completion scripts.
 //!
 //! Uses [`clap_complete`] to generate completion scripts for all supported
 //! shells. The output is written to stdout so the caller can redirect it to
@@ -8,16 +8,16 @@
 //!
 //! ```text
 //! # Bash
-//! gvm completions bash > ~/.local/share/bash-completion/completions/gvm
+//! gvsn completions bash > ~/.local/share/bash-completion/completions/gvsn
 //!
 //! # Zsh  (fpath must be configured)
-//! gvm completions zsh > "${fpath[1]}/_gvm"
+//! gvsn completions zsh > "${fpath[1]}/_gvsn"
 //!
 //! # Fish
-//! gvm completions fish > ~/.config/fish/completions/gvm.fish
+//! gvsn completions fish > ~/.config/fish/completions/gvsn.fish
 //!
 //! # PowerShell
-//! gvm completions powershell >> $PROFILE
+//! gvsn completions powershell >> $PROFILE
 //! ```
 
 use anyhow::{bail, Result};
@@ -45,7 +45,7 @@ pub fn run(shell_str: &str) -> Result<()> {
     };
 
     let mut cmd = Cli::command();
-    generate(shell, &mut cmd, "gvm", &mut std::io::stdout());
+    generate(shell, &mut cmd, "gvsn", &mut std::io::stdout());
     Ok(())
 }
 

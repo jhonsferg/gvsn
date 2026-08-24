@@ -1,7 +1,7 @@
-//! `gvm prune` - remove unreferenced installed Go versions.
+//! `gvsn prune` - remove unreferenced installed Go versions.
 //!
 //! A version is considered "referenced" when it is either:
-//! - The current global default (`~/.gvm/version`), or
+//! - The current global default (`~/.gvsn/version`), or
 //! - Named in a `.go-version` file found by walking up from the current
 //!   working directory, or
 //! - Named in a `.go-version` file found anywhere inside `--scan-dir`

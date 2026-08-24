@@ -1,13 +1,13 @@
-//! Default packages installation for `gvm install`.
+//! Default packages installation for `gvsn install`.
 
 use colored::Colorize;
 
 use crate::{config::Config, version::GoVersion};
 
-/// Reads `~/.gvm/default-packages` and runs `go install <pkg>` for each entry.
+/// Reads `~/.gvsn/default-packages` and runs `go install <pkg>` for each entry.
 ///
 /// Errors from individual package installs are printed as warnings rather than
-/// propagated so they never block the overall `gvm install` flow.
+/// propagated so they never block the overall `gvsn install` flow.
 pub fn install_default_packages(config: &Config, version: &GoVersion) {
     let pkg_file = config.default_packages_file();
     if !pkg_file.exists() {

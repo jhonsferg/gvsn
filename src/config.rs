@@ -1,12 +1,12 @@
 //! User configuration and directory layout.
 //!
-//! [`Config`] is the single source of truth for every path that `gvm` reads
+//! [`Config`] is the single source of truth for every path that `gvsn` reads
 //! from or writes to. All other modules receive a `&Config` reference rather
 //! than constructing paths themselves, which keeps the directory layout easy
 //! to change in one place.
 //!
-//! The root directory defaults to `~/.gvm` and can be overridden with the
-//! `GVM_DIR` environment variable.
+//! The root directory defaults to `~/.gvsn` and can be overridden with the
+//! `GVSN_DIR` environment variable.
 
 use anyhow::{Context, Result};
 use std::path::PathBuf;
@@ -14,29 +14,29 @@ use std::path::PathBuf;
 /// Immutable configuration loaded at startup.
 ///
 /// All path helpers are derived from the single [`root`](Config::root) field
-/// so the entire directory tree moves atomically when `GVM_DIR` is set.
+/// so the entire directory tree moves atomically when `GVSN_DIR` is set.
 #[derive(Debug)]
 pub struct Config {
-    /// Root directory for all gvm data (default: `~/.gvm`).
+    /// Root directory for all gvsn data (default: `~/.gvsn`).
     pub root: PathBuf,
 }
 
 impl Config {
     /// Loads configuration from the environment.
     ///
-    /// The root directory is taken from `GVM_DIR` if set; otherwise it
-    /// defaults to `~/.gvm`.
+    /// The root directory is taken from `GVSN_DIR` if set; otherwise it
+    /// defaults to `~/.gvsn`.
     ///
     /// # Errors
     ///
-    /// Returns an error if the home directory cannot be determined and `GVM_DIR`
+    /// Returns an error if the home directory cannot be determined and `GVSN_DIR`
     /// is not set.
     pub fn load() -> Result<Self> {
-        let root = match std::env::var("GVM_DIR") {
+        let root = match std::env::var("GVSN_DIR") {
             Ok(dir) => PathBuf::from(dir),
             Err(_) => dirs::home_dir()
                 .context("Cannot determine home directory")?
-                .join(".gvm"),
+                .join(".gvsn"),
         };
         Ok(Self { root })
     }
@@ -64,7 +64,7 @@ impl Config {
 
     /// Returns the installation directory for a specific Go version tag.
     ///
-    /// Layout: `<root>/versions/<tag>/`  (e.g. `~/.gvm/versions/go1.22.4/`)
+    /// Layout: `<root>/versions/<tag>/`  (e.g. `~/.gvsn/versions/go1.22.4/`)
     pub fn version_dir(&self, tag: &str) -> PathBuf {
         self.versions_dir().join(tag)
     }
@@ -81,7 +81,7 @@ impl Config {
     ///
     /// Adding `<root>/current/bin` to the OS PATH once (during install) makes
     /// `go` available in every shell - CMD, Git Bash, editors - without session
-    /// hooks. `gvm use` updates this link; the PATH entry never changes.
+    /// hooks. `gvsn use` updates this link; the PATH entry never changes.
     ///
     /// Layout: `<root>/current` -> `<root>/versions/<active-tag>/`
     pub fn current_dir(&self) -> PathBuf {
@@ -90,7 +90,7 @@ impl Config {
 
     /// Returns the path to the optional default-packages file.
     ///
-    /// When this file exists, `gvm install` reads it after a successful
+    /// When this file exists, `gvsn install` reads it after a successful
     /// installation and runs `go install <pkg>` for each non-blank, non-comment
     /// line. This mirrors mise's `MISE_GO_DEFAULT_PACKAGES_FILE` feature.
     ///
@@ -130,19 +130,19 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn config_load_uses_gvm_dir() {
+    fn config_load_uses_gvsn_dir() {
         let dir = tempdir().unwrap();
-        std::env::set_var("GVM_DIR", dir.path());
+        std::env::set_var("GVSN_DIR", dir.path());
         let config = Config::load().unwrap();
         assert_eq!(config.root, dir.path());
-        std::env::remove_var("GVM_DIR");
+        std::env::remove_var("GVSN_DIR");
     }
 
     #[test]
-    fn config_load_defaults_to_home_gvm() {
-        std::env::remove_var("GVM_DIR");
+    fn config_load_defaults_to_home_gvsn() {
+        std::env::remove_var("GVSN_DIR");
         let config = Config::load().unwrap();
-        assert!(config.root.ends_with(".gvm"));
+        assert!(config.root.ends_with(".gvsn"));
     }
 
     #[test]

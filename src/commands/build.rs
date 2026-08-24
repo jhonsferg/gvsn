@@ -1,10 +1,10 @@
-//! `gvm build` - compile a Go version from source.
+//! `gvsn build` - compile a Go version from source.
 //!
-//! Unlike `gvm install` which downloads a precompiled binary, this command
+//! Unlike `gvsn install` which downloads a precompiled binary, this command
 //! fetches the official Go source tarball from go.dev, locates or downloads a
 //! suitable bootstrap compiler, and runs the platform build script
 //! (`src/make.bash` on Unix, `src/make.bat` on Windows) to produce a fully
-//! functional Go toolchain installed into `~/.gvm/versions/go<X>.<Y>.<Z>/`.
+//! functional Go toolchain installed into `~/.gvsn/versions/go<X>.<Y>.<Z>/`.
 //!
 //! # Steps
 //!
@@ -16,7 +16,7 @@
 //! 5. Download and verify the source tarball.
 //! 6. Extract to a unique staging directory.
 //! 7. Run the build script with `GOROOT_BOOTSTRAP` and any user-supplied env vars.
-//! 8. Move the compiled tree to `~/.gvm/versions/<tag>/`.
+//! 8. Move the compiled tree to `~/.gvsn/versions/<tag>/`.
 //! 9. Clean up staging and temporary bootstrap directories.
 
 use anyhow::{anyhow, Context, Result};
@@ -33,7 +33,7 @@ use crate::{
     archive::{download, extract},
     commands::bootstrap,
     config::{Config, ConfigMut},
-    fs as gvm_fs,
+    fs as gvsn_fs,
     http::HttpClient,
     lock,
     remote::index,
@@ -42,7 +42,7 @@ use crate::{
     user_version::VersionSpec,
 };
 
-/// Compiles `version_str` from source and installs it to the gvm versions store.
+/// Compiles `version_str` from source and installs it to the gvsn versions store.
 pub fn run(
     config: &Config,
     client: &HttpClient,
@@ -114,8 +114,8 @@ pub fn run(
     println!("{} Bootstrap: {}", "->".cyan(), bootstrap.label.bold());
 
     // Download and extract the source tarball under a lock: the destination
-    // path in tmp/ is deterministic per version, so a concurrent `gvm build`
-    // or `gvm install` of the same version must not write to it at the same
+    // path in tmp/ is deterministic per version, so a concurrent `gvsn build`
+    // or `gvsn install` of the same version must not write to it at the same
     // time. The lock is released before compilation starts below, since
     // compilation only touches the unique staging directory.
     let lock_path = config.root.join(".lock");
@@ -199,7 +199,7 @@ pub fn run(
     // Move the compiled tree to the versions store.
     let dest = config.version_dir(&version.tag());
     let lock_path = config.root.join(".lock");
-    if let Err(e) = lock::with_lock(&lock_path, || gvm_fs::move_dir(&source_root, &dest)) {
+    if let Err(e) = lock::with_lock(&lock_path, || gvsn_fs::move_dir(&source_root, &dest)) {
         // TempDir will auto-cleanup on drop
         return Err(e).context("Failed to move compiled Go to versions directory");
     }
@@ -214,7 +214,7 @@ pub fn run(
     );
     println!(
         "  Run {} to activate.",
-        format!("gvm use {}", version).cyan()
+        format!("gvsn use {}", version).cyan()
     );
 
     Ok(())
@@ -229,22 +229,22 @@ pub fn run(
 /// build fails, making it easy to diagnose errors without cluttering the
 /// normal flow.
 ///
-/// `gvm_tmp` is the gvm scratch directory (`~/.gvm/tmp/`). A process-unique
+/// `gvsn_tmp` is the gvsn scratch directory (`~/.gvsn/tmp/`). A process-unique
 /// subdirectory is created there and passed as `TEMP`/`TMP`/`TMPDIR` so that
-/// Go's intermediate artifacts never leave `~/.gvm/`.
+/// Go's intermediate artifacts never leave `~/.gvsn/`.
 fn compile(
     client: &HttpClient,
     source_root: &Path,
     bootstrap_path: &Path,
     no_cgo: bool,
     env_vars: &[String],
-    gvm_tmp: &Path,
+    gvsn_tmp: &Path,
 ) -> Result<()> {
     let src_dir = source_root.join("src");
 
-    let build_tmp = gvm_tmp.join(format!("go-build-{}", std::process::id()));
+    let build_tmp = gvsn_tmp.join(format!("go-build-{}", std::process::id()));
     std::fs::create_dir_all(&build_tmp)
-        .context("Failed to create build scratch directory inside .gvm/tmp")?;
+        .context("Failed to create build scratch directory inside .gvsn/tmp")?;
 
     #[cfg(windows)]
     let (script_name, mut cmd) = {
@@ -379,7 +379,7 @@ fn compile(
 
         #[cfg(windows)]
         {
-            let gvm_root = gvm_tmp.parent().unwrap_or(gvm_tmp);
+            let gvsn_root = gvsn_tmp.parent().unwrap_or(gvsn_tmp);
             println!();
             println!(
                 "  {} Build failed. If the output above contains 'Access denied' or",
@@ -389,10 +389,10 @@ fn compile(
             println!("    executables compiled during the build.");
             println!();
             println!(
-                "  {} All gvm build artifacts are written exclusively inside:",
+                "  {} All gvsn build artifacts are written exclusively inside:",
                 "i".cyan()
             );
-            println!("      {}", gvm_root.display());
+            println!("      {}", gvsn_root.display());
             println!();
             println!(
                 "  {} Add that directory as an exclusion in your antivirus:",
@@ -400,7 +400,7 @@ fn compile(
             );
             println!("    Windows Security -> Virus & threat protection ->");
             println!("    Manage settings -> Exclusions -> Add an exclusion -> Folder");
-            println!("    Then retry: gvm build <version>");
+            println!("    Then retry: gvsn build <version>");
         }
 
         anyhow::bail!(

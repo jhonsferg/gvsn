@@ -1,6 +1,6 @@
 //! Single-stream download engine with resume and retry support.
 //!
-//! [`fetch`] is the single entry point for all downloads in `gvm`. Every
+//! [`fetch`] is the single entry point for all downloads in `gvsn`. Every
 //! download uses one HTTP connection end to end - no chunking, no
 //! multi-bar coordination, nothing to race against. A large read buffer
 //! keeps per-syscall overhead low so the stream can use as much of the

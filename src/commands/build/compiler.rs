@@ -21,22 +21,22 @@ use crate::{http::HttpClient, lock};
 /// build fails, making it easy to diagnose errors without cluttering the
 /// normal flow.
 ///
-/// `gvm_tmp` is the gvm scratch directory (`~/.gvm/tmp/`). A process-unique
+/// `gvsn_tmp` is the gvsn scratch directory (`~/.gvsn/tmp/`). A process-unique
 /// subdirectory is created there and passed as `TEMP`/`TMP`/`TMPDIR` so that
-/// Go's intermediate artifacts never leave `~/.gvm/`.
+/// Go's intermediate artifacts never leave `~/.gvsn/`.
 pub fn compile(
     client: &HttpClient,
     source_root: &Path,
     bootstrap_path: &Path,
     no_cgo: bool,
     env_vars: &[String],
-    gvm_tmp: &Path,
+    gvsn_tmp: &Path,
 ) -> Result<()> {
     let src_dir = source_root.join("src");
 
-    let build_tmp = gvm_tmp.join(format!("go-build-{}", std::process::id()));
+    let build_tmp = gvsn_tmp.join(format!("go-build-{}", std::process::id()));
     std::fs::create_dir_all(&build_tmp)
-        .context("Failed to create build scratch directory inside .gvm/tmp")?;
+        .context("Failed to create build scratch directory inside .gvsn/tmp")?;
 
     #[cfg(windows)]
     let (script_name, mut cmd) = {
@@ -181,7 +181,7 @@ pub fn compile(
 
         #[cfg(windows)]
         {
-            let gvm_root = gvm_tmp.parent().unwrap_or(gvm_tmp);
+            let gvsn_root = gvsn_tmp.parent().unwrap_or(gvsn_tmp);
             println!();
             println!(
                 "  {} Build failed. If the output above contains 'Access denied' or",
@@ -191,10 +191,10 @@ pub fn compile(
             println!("    executables compiled during the build.");
             println!();
             println!(
-                "  {} All gvm build artifacts are written exclusively inside:",
+                "  {} All gvsn build artifacts are written exclusively inside:",
                 "i".cyan()
             );
-            println!("      {}", gvm_root.display());
+            println!("      {}", gvsn_root.display());
             println!();
             println!(
                 "  {} Add that directory as an exclusion in your antivirus:",
@@ -202,7 +202,7 @@ pub fn compile(
             );
             println!("    Windows Security -> Virus & threat protection ->");
             println!("    Manage settings -> Exclusions -> Add an exclusion -> Folder");
-            println!("    Then retry: gvm build <version>");
+            println!("    Then retry: gvsn build <version>");
         }
 
         anyhow::bail!(

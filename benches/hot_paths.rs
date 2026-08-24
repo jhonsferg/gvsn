@@ -1,19 +1,19 @@
-//! Local-only performance benchmarks for gvm's hottest pure-computation
+//! Local-only performance benchmarks for gvsn's hottest pure-computation
 //! paths, identified via call-graph fan-in/loop analysis rather than guessed:
 //!
-//! - [`gvm_rs::profile::ShellProfile::parse`] - re-parses the user's shell
-//!   profile on every `gvm setup`/`gvm doctor` run.
-//! - [`gvm_rs::version::GoVersion::parse`] - the single highest fan-in
+//! - [`gvsn::profile::ShellProfile::parse`] - re-parses the user's shell
+//!   profile on every `gvsn setup`/`gvsn doctor` run.
+//! - [`gvsn::version::GoVersion::parse`] - the single highest fan-in
 //!   function in the whole call graph (20 callers): every version comparison
 //!   and lookup goes through it.
-//! - [`gvm_rs::gvm_release::parse_semver`] - parses gvm's own release tag on
-//!   every `gvm upgrade` and the background update check.
-//! - [`gvm_rs::archive::download::verify_sha256`] - hashes the full archive
+//! - [`gvsn::gvsn_release::parse_semver`] - parses gvsn's own release tag on
+//!   every `gvsn upgrade` and the background update check.
+//! - [`gvsn::archive::download::verify_sha256`] - hashes the full archive
 //!   after every download; the one benchmark here with a real I/O component.
-//! - [`gvm_rs::version::parse_tool_versions_golang_line`] - added alongside
+//! - [`gvsn::version::parse_tool_versions_golang_line`] - added alongside
 //!   `.go-version` in `toolchain::active_version`'s directory walk-up, so it
 //!   now runs on every command in a project that uses an asdf-style
-//!   `.tool-versions` file instead of gvm's own pin file.
+//!   `.tool-versions` file instead of gvsn's own pin file.
 //!
 //! Run locally with `cargo bench`. This target is intentionally never
 //! invoked from `.github/workflows/*` - see `benches/README.md`.
@@ -23,12 +23,12 @@ use std::io::Write;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 
-use gvm_rs::archive::download::verify_sha256;
-use gvm_rs::gvm_release::parse_semver;
-use gvm_rs::profile::ShellProfile;
-use gvm_rs::version::{parse_tool_versions_golang_line, GoVersion};
+use gvsn::archive::download::verify_sha256;
+use gvsn::gvsn_release::parse_semver;
+use gvsn::profile::ShellProfile;
+use gvsn::version::{parse_tool_versions_golang_line, GoVersion};
 
-/// Builds a synthetic shell profile with `blocks` gvm-managed blocks
+/// Builds a synthetic shell profile with `blocks` gvsn-managed blocks
 /// interleaved with unrelated user lines, roughly matching what a
 /// long-lived `.bashrc`/`.zshrc` looks like after years of accumulated
 /// aliases and exports.
@@ -38,10 +38,10 @@ fn synthetic_profile(blocks: usize) -> String {
         s.push_str(&format!("export MY_VAR_{i}=value_{i}\n"));
         s.push_str("alias ll='ls -la'\n\n");
     }
-    s.push_str("# gvm init\n");
-    s.push_str("eval \"$(gvm env --shell bash)\"\n\n");
-    s.push_str("# gvm wrapper\n");
-    s.push_str("gvm() { command gvm \"$@\"; }\n\n");
+    s.push_str("# gvsn init\n");
+    s.push_str("eval \"$(gvsn env --shell bash)\"\n\n");
+    s.push_str("# gvsn wrapper\n");
+    s.push_str("gvsn() { command gvsn \"$@\"; }\n\n");
     for i in 0..blocks {
         s.push_str(&format!(
             "# custom function {i}\nmy_func_{i}() {{ echo {i}; }}\n\n"

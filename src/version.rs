@@ -22,21 +22,21 @@ pub struct GoVersion {
     pub patch: u32,
 }
 
-/// Filename gvm uses for its own per-project version pin, written by
-/// `gvm local` and checked first when resolving the active version.
+/// Filename gvsn uses for its own per-project version pin, written by
+/// `gvsn local` and checked first when resolving the active version.
 pub const GO_VERSION_FILE: &str = ".go-version";
 
 /// Filename asdf (and asdf-compatible tools) use for per-project version
 /// pins. Checked as a fallback when [`GO_VERSION_FILE`] is absent, so a
 /// project that already pins its Go version via asdf's `golang` plugin does
-/// not need a separate gvm-specific file.
+/// not need a separate gvsn-specific file.
 pub const TOOL_VERSIONS_FILE: &str = ".tool-versions";
 
 /// Extracts the version from the `golang` line of a `.tool-versions` file's
 /// contents (asdf format: `<tool> <version> [<fallback-version> ...]`, one
 /// tool per line, blank lines and `#` comments ignored).
 ///
-/// Only the first version listed is returned - gvm has no concept of a
+/// Only the first version listed is returned - gvsn has no concept of a
 /// fallback version list. Returns `None` when no `golang` line is present.
 pub fn parse_tool_versions_golang_line(content: &str) -> Option<&str> {
     content.lines().find_map(|line| {

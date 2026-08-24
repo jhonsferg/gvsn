@@ -1,14 +1,14 @@
-//! Entry point for the `gvm` binary.
+//! Entry point for the `gvsn` binary.
 //!
 //! Parses the command-line interface, loads the user configuration, and
 //! dispatches to the appropriate command handler. No business logic lives
 //! here; every command is implemented in its own submodule under
-//! [`gvm_rs::commands`], reachable through the [`gvm_rs`] library crate.
+//! [`gvsn::commands`], reachable through the [`gvsn`] library crate.
 
 use clap::Parser;
 use colored::Colorize;
 
-use gvm_rs::{cli::Cli, config::Config, run, update_check};
+use gvsn::{cli::Cli, config::Config, run, update_check};
 
 fn main() {
     let cli = Cli::parse();

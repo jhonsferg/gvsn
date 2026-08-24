@@ -1,9 +1,9 @@
-//! `gvm uninstall` - remove an installed Go version from disk.
+//! `gvsn uninstall` - remove an installed Go version from disk.
 //!
 //! The command refuses to uninstall the currently active version to avoid
 //! leaving the environment in a broken state. Unless `--force` is passed, it
 //! also asks for confirmation before deleting anything - consistent with the
-//! other commands that remove installed toolchains (`gvm prune`, `gvm implode`).
+//! other commands that remove installed toolchains (`gvsn prune`, `gvsn implode`).
 
 use anyhow::{bail, Result};
 use colored::Colorize;
@@ -36,7 +36,7 @@ pub fn run(config: &Config, spec_str: &str, force: bool) -> Result<()> {
         if active == version {
             bail!(
                 "Cannot uninstall the currently active version ({}). \
-                 Switch first with 'gvm use <version>'.",
+                 Switch first with 'gvsn use <version>'.",
                 version.tag()
             );
         }

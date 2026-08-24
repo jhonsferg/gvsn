@@ -22,8 +22,8 @@ use std::path::{Path, PathBuf};
 /// Context passed to [`ShellConfig::env_script`] when generating the shell
 /// initialisation script for the current session.
 pub struct EnvContext<'a> {
-    /// Path to the gvm root directory (value of `GVM_DIR`).
-    pub gvm_dir: &'a Path,
+    /// Path to the gvsn root directory (value of `GVSN_DIR`).
+    pub gvsn_dir: &'a Path,
 
     /// Path to the `bin/` directory of the currently active Go version.
     /// `None` when no version is active.
@@ -37,18 +37,18 @@ pub struct EnvContext<'a> {
 /// Behaviour that every supported shell must implement.
 ///
 /// Implementors must be `Debug` so they can be logged and inspected.
-/// The trait is object-safe and is used throughout `gvm` as
+/// The trait is object-safe and is used throughout `gvsn` as
 /// `Box<dyn ShellConfig>` or `&dyn ShellConfig`.
 pub trait ShellConfig: std::fmt::Debug {
     /// Short, lowercase identifier for the shell (e.g. `"bash"`, `"powershell"`).
     fn name(&self) -> &'static str;
 
-    /// Generates the shell script that sets `GVM_DIR`, `PATH`, `GOROOT`,
+    /// Generates the shell script that sets `GVSN_DIR`, `PATH`, `GOROOT`,
     /// and installs the `cd` hook for automatic version switching.
     fn env_script(&self, ctx: &EnvContext<'_>) -> String;
 
     /// Returns the path to the shell's user-level startup file where the
-    /// `gvm env` hook line should be appended, or `None` if the path cannot
+    /// `gvsn env` hook line should be appended, or `None` if the path cannot
     /// be determined.
     fn profile_path(&self) -> Option<PathBuf>;
 
@@ -63,29 +63,29 @@ pub trait ShellConfig: std::fmt::Debug {
     }
 
     /// Returns the one-liner that should be added to the shell profile so
-    /// `gvm env` is evaluated on every new session.
+    /// `gvsn env` is evaluated on every new session.
     fn init_line(&self) -> &'static str;
 
-    /// Returns the shell function definition that wraps the `gvm` binary.
+    /// Returns the shell function definition that wraps the `gvsn` binary.
     ///
-    /// When sourced, this function calls the real `gvm` binary and then
-    /// immediately re-evaluates `gvm env` after `use`, `default`, or `local`
+    /// When sourced, this function calls the real `gvsn` binary and then
+    /// immediately re-evaluates `gvsn env` after `use`, `default`, or `local`
     /// commands so that `PATH` and `GOROOT` are updated in the current shell
     /// session without opening a new terminal.
     fn wrapper_function(&self) -> &'static str;
 
     /// Returns a minimal shell script that activates `version_tag` for the
-    /// current session only (sets `GVM_SHELL_VERSION`, `GOROOT`, and `PATH`).
+    /// current session only (sets `GVSN_SHELL_VERSION`, `GOROOT`, and `PATH`).
     ///
-    /// This script is emitted by `gvm shell <version>` and evaluated by the
-    /// shell wrapper function. The `_gvm_hook` checks `GVM_SHELL_VERSION` and
+    /// This script is emitted by `gvsn shell <version>` and evaluated by the
+    /// shell wrapper function. The `_gvsn_hook` checks `GVSN_SHELL_VERSION` and
     /// skips its normal version switching while this override is active, so the
-    /// activation persists across `cd` calls until `gvm shell --unset` is run.
+    /// activation persists across `cd` calls until `gvsn shell --unset` is run.
     fn shell_version_script(&self, version_tag: &str, bin: &Path, root: &Path) -> String;
 
     /// Returns the shell script that clears the session-scoped override.
     ///
-    /// The script unsets `GVM_SHELL_VERSION` and calls `_gvm_hook` so that
+    /// The script unsets `GVSN_SHELL_VERSION` and calls `_gvsn_hook` so that
     /// `PATH` and `GOROOT` are immediately restored to whatever `.go-version`
     /// or the global default says.
     fn shell_unset_script(&self) -> &'static str;
@@ -99,16 +99,16 @@ pub trait ShellConfig: std::fmt::Debug {
         self.name()
     }
 
-    /// Returns `true` if the `# gvm init` block should prepend an explicit
-    /// `export PATH` line for the gvm binary directory.
+    /// Returns `true` if the `# gvsn init` block should prepend an explicit
+    /// `export PATH` line for the gvsn binary directory.
     ///
     /// Needed for bash and zsh: on Linux/macOS, the login profile (`~/.profile`,
     /// `~/.zprofile`) sources the interactive profile (`~/.bashrc`, `~/.zshrc`)
-    /// BEFORE adding `~/.local/bin` to PATH, so `gvm env` would fail with
+    /// BEFORE adding `~/.local/bin` to PATH, so `gvsn env` would fail with
     /// "command not found" on every SSH login. Prepending the install dir inside
-    /// the `# gvm init` block makes it self-sufficient regardless of order.
+    /// the `# gvsn init` block makes it self-sufficient regardless of order.
     ///
-    /// Fish guards its init line with `command -q gvm` (silent skip), so it
+    /// Fish guards its init line with `command -q gvsn` (silent skip), so it
     /// never emits errors. PowerShell uses the Windows registry, where PATH is
     /// fully set before any shell starts.
     fn needs_bin_path_in_init(&self) -> bool {
@@ -147,7 +147,7 @@ impl ShellConfig for Bash {
         return None;
     }
     fn init_line(&self) -> &'static str {
-        r#"eval "$(gvm env --shell bash)""#
+        r#"eval "$(gvsn env --shell bash)""#
     }
     fn wrapper_function(&self) -> &'static str {
         bash::wrapper_function()
@@ -181,7 +181,7 @@ impl ShellConfig for Zsh {
         return None;
     }
     fn init_line(&self) -> &'static str {
-        r#"eval "$(gvm env --shell zsh)""#
+        r#"eval "$(gvsn env --shell zsh)""#
     }
     fn wrapper_function(&self) -> &'static str {
         zsh::wrapper_function()
@@ -208,7 +208,7 @@ impl ShellConfig for Fish {
         fish::profile_path()
     }
     fn init_line(&self) -> &'static str {
-        "if command -q gvm; gvm env --shell fish | source; end"
+        "if command -q gvsn; gvsn env --shell fish | source; end"
     }
     fn wrapper_function(&self) -> &'static str {
         fish::wrapper_function()
@@ -238,12 +238,12 @@ impl ShellConfig for PowerShell {
         powershell::profile_path()
     }
     fn init_line(&self) -> &'static str {
-        // Guarded, unlike the other shells' `init_line`s: `eval "$(gvm env ...)"`
-        // in bash/zsh silently evaluates nothing if `gvm` can't run, but
+        // Guarded, unlike the other shells' `init_line`s: `eval "$(gvsn env ...)"`
+        // in bash/zsh silently evaluates nothing if `gvsn` can't run, but
         // PowerShell's `&`-invocation of a blocked/missing binary (AppLocker,
         // WDAC, Smart App Control, or simply not yet on PATH) throws a
         // terminating error, which would otherwise surface on every new shell.
-        "if (Get-Command gvm -ErrorAction SilentlyContinue) { try { gvm env --shell powershell | Out-String | Invoke-Expression } catch {} }"
+        "if (Get-Command gvsn -ErrorAction SilentlyContinue) { try { gvsn env --shell powershell | Out-String | Invoke-Expression } catch {} }"
     }
     fn wrapper_function(&self) -> &'static str {
         powershell::wrapper_function()
@@ -369,21 +369,21 @@ fn find_binary(name: &str) -> bool {
 
 // --- Profile injection -------------------------------------------------------
 
-/// Builds the content body of the `# gvm init` block.
+/// Builds the content body of the `# gvsn init` block.
 ///
 /// For bash and zsh on non-Windows systems, prepends an `export PATH` line
-/// for the gvm binary directory so the block is self-sufficient even when
+/// for the gvsn binary directory so the block is self-sufficient even when
 /// sourced before the install dir is on PATH (e.g. Debian's `~/.profile`
 /// sources `~/.bashrc` before adding `~/.local/bin`).
-fn build_init_content(shell: &dyn ShellConfig, gvm_bin_dir: Option<&Path>) -> String {
+fn build_init_content(shell: &dyn ShellConfig, gvsn_bin_dir: Option<&Path>) -> String {
     if shell.needs_bin_path_in_init() {
         #[cfg(not(target_os = "windows"))]
-        if let Some(dir) = gvm_bin_dir {
+        if let Some(dir) = gvsn_bin_dir {
             let path_expr = home_relative_path(dir);
             return format!("export PATH=\"{path_expr}:$PATH\"\n{}", shell.init_line());
         }
     }
-    let _ = gvm_bin_dir;
+    let _ = gvsn_bin_dir;
     shell.init_line().to_string()
 }
 
@@ -400,19 +400,19 @@ fn home_relative_path(path: &Path) -> String {
     path.display().to_string()
 }
 
-/// Appends the `gvm env` hook and the shell wrapper function to the shell's
+/// Appends the `gvsn env` hook and the shell wrapper function to the shell's
 /// profile file.
 ///
 /// Two independent markers are used so that each block can be injected
-/// separately and both can be detected by `gvm implode` for clean removal:
+/// separately and both can be detected by `gvsn implode` for clean removal:
 ///
-/// - `# gvm init` - guards the `eval "$(gvm env ...)"` one-liner that sets
+/// - `# gvsn init` - guards the `eval "$(gvsn env ...)"` one-liner that sets
 ///   `PATH`/`GOROOT` on every new shell session.
-/// - `# gvm wrapper` - guards the `gvm()` / `function gvm` definition that
-///   immediately refreshes the current session after `gvm use`, `gvm default`,
-///   or `gvm local` without requiring a new terminal.
+/// - `# gvsn wrapper` - guards the `gvsn()` / `function gvsn` definition that
+///   immediately refreshes the current session after `gvsn use`, `gvsn default`,
+///   or `gvsn local` without requiring a new terminal.
 ///
-/// Re-running `gvm setup` is safe: each block is only appended when its
+/// Re-running `gvsn setup` is safe: each block is only appended when its
 /// marker is absent, so existing installations receive the wrapper function
 /// on upgrade without duplicating the init hook.
 ///
@@ -422,10 +422,10 @@ fn home_relative_path(path: &Path) -> String {
 ///
 /// Returns an error if the profile path cannot be determined, the file cannot
 /// be read, or the file cannot be written.
-pub fn inject_profile(shell: &dyn ShellConfig, gvm_bin_dir: Option<&Path>) -> Result<()> {
+pub fn inject_profile(shell: &dyn ShellConfig, gvsn_bin_dir: Option<&Path>) -> Result<()> {
     use crate::profile;
 
-    let init_content = build_init_content(shell, gvm_bin_dir);
+    let init_content = build_init_content(shell, gvsn_bin_dir);
     let wrapper_content = shell.wrapper_function().to_string();
 
     let profile_path = shell
@@ -435,14 +435,14 @@ pub fn inject_profile(shell: &dyn ShellConfig, gvm_bin_dir: Option<&Path>) -> Re
     profile::ensure_profile(&profile_path, &init_content, &wrapper_content)
         .with_context(|| format!("Failed to update profile {}", profile_path.display()))?;
 
-    println!("  gvm hook configured in {}", profile_path.display());
+    println!("  gvsn hook configured in {}", profile_path.display());
     Ok(())
 }
 
-/// Injects a static `~/.gvm/current/bin` PATH entry into the shell's login
+/// Injects a static `~/.gvsn/current/bin` PATH entry into the shell's login
 /// profile (e.g. `~/.profile` for bash, `~/.zprofile` for zsh).
 ///
-/// This entry uses the `# gvm path` marker and is evaluated even in
+/// This entry uses the `# gvsn path` marker and is evaluated even in
 /// non-interactive shells, making `go` visible to GUI applications such as
 /// VSCode and GoLand that do not source `~/.bashrc`.
 ///
@@ -463,16 +463,16 @@ pub fn inject_login_profile(shell: &dyn ShellConfig) -> Result<()> {
     profile::update_path_block(&profile_path)
         .with_context(|| format!("Failed to update PATH block in {}", profile_path.display()))?;
 
-    println!("  gvm PATH entry configured in {}", profile_path.display());
+    println!("  gvsn PATH entry configured in {}", profile_path.display());
     Ok(())
 }
 
-/// Strips all gvm-managed blocks from `profile`.
+/// Strips all gvsn-managed blocks from `profile`.
 ///
 /// Returns `Ok(true)` when the file was modified, `Ok(false)` when it
-/// contained no gvm entries or did not exist.
+/// contained no gvsn entries or did not exist.
 ///
-/// Used by `gvm implode` and `gvm setup --reset`.
+/// Used by `gvsn implode` and `gvsn setup --reset`.
 ///
 /// # Errors
 ///
@@ -483,15 +483,15 @@ pub fn strip_profile(path: &Path) -> Result<bool> {
     if !path.exists() {
         return Ok(false);
     }
-    profile::strip_gvm_blocks(path)
+    profile::strip_gvsn_blocks(path)
 }
 
-/// Returns `true` if the directory containing the current `gvm` executable
+/// Returns `true` if the directory containing the current `gvsn` executable
 /// is listed in the `PATH` environment variable.
 ///
-/// Used by `gvm setup` and `gvm doctor` to warn the user when the binary
+/// Used by `gvsn setup` and `gvsn doctor` to warn the user when the binary
 /// itself is not reachable from the shell.
-pub fn gvm_in_path() -> bool {
+pub fn gvsn_in_path() -> bool {
     let Ok(exe) = std::env::current_exe() else {
         return false;
     };
@@ -538,7 +538,7 @@ mod tests {
             Some(self.login_profile.clone())
         }
         fn init_line(&self) -> &'static str {
-            r#"eval "$(gvm env --shell bash)""#
+            r#"eval "$(gvsn env --shell bash)""#
         }
         fn wrapper_function(&self) -> &'static str {
             bash::wrapper_function()
@@ -565,9 +565,9 @@ mod tests {
         inject_profile(&sh, None).unwrap();
 
         let content = fs::read_to_string(&sh.profile).unwrap();
-        assert!(content.contains("# gvm init"));
-        assert!(content.contains("# gvm wrapper"));
-        assert!(content.contains(r#"eval "$(gvm env --shell bash)""#));
+        assert!(content.contains("# gvsn init"));
+        assert!(content.contains("# gvsn wrapper"));
+        assert!(content.contains(r#"eval "$(gvsn env --shell bash)""#));
     }
 
     #[test]
@@ -614,12 +614,12 @@ mod tests {
         inject_login_profile(&sh).unwrap();
 
         let content = fs::read_to_string(&sh.login_profile).unwrap();
-        assert!(content.contains("# gvm path"));
-        assert!(content.contains(r#"export PATH="$HOME/.gvm/current/bin:$PATH""#));
+        assert!(content.contains("# gvsn path"));
+        assert!(content.contains(r#"export PATH="$HOME/.gvsn/current/bin:$PATH""#));
     }
 
     #[test]
-    fn strip_profile_removes_gvm_blocks_after_inject() {
+    fn strip_profile_removes_gvsn_blocks_after_inject() {
         let dir = tempdir().unwrap();
         let sh = TempShell {
             profile: dir.path().join("profile"),
@@ -630,14 +630,14 @@ mod tests {
         inject_profile(&sh, None).unwrap();
         assert!(fs::read_to_string(&sh.profile)
             .unwrap()
-            .contains("# gvm init"));
+            .contains("# gvsn init"));
 
         let changed = strip_profile(&sh.profile).unwrap();
         assert!(changed);
 
         let content = fs::read_to_string(&sh.profile).unwrap();
-        assert!(!content.contains("# gvm init"));
-        assert!(!content.contains("# gvm wrapper"));
+        assert!(!content.contains("# gvsn init"));
+        assert!(!content.contains("# gvsn wrapper"));
         assert!(
             content.contains("export FOO=bar"),
             "user content must survive"
@@ -653,8 +653,8 @@ mod tests {
     }
 
     fn run_inject(shell: &dyn ShellConfig, existing: &str) -> String {
-        const INIT_MARKER: &str = "# gvm init";
-        const WRAPPER_MARKER: &str = "# gvm wrapper";
+        const INIT_MARKER: &str = "# gvsn init";
+        const WRAPPER_MARKER: &str = "# gvsn wrapper";
 
         let dir = tempdir().unwrap();
         let path = dir.path().join("profile");
@@ -678,7 +678,7 @@ mod tests {
                     let after = &content[pos + INIT_MARKER.len()..];
                     let end = pos
                         + INIT_MARKER.len()
-                        + after.find("\n# gvm ").map(|i| i + 1).unwrap_or(after.len());
+                        + after.find("\n# gvsn ").map(|i| i + 1).unwrap_or(after.len());
                     let new_block = format!("{INIT_MARKER}\n{init_content}\n");
                     content = format!("{}{}{}", &content[..pos], new_block, &content[end..]);
                 }
@@ -715,8 +715,8 @@ mod tests {
     #[test]
     fn setup_injects_both_blocks_into_empty_profile() {
         let result = run_inject(&Bash, "");
-        assert!(result.contains("# gvm init"));
-        assert!(result.contains("# gvm wrapper"));
+        assert!(result.contains("# gvsn init"));
+        assert!(result.contains("# gvsn wrapper"));
         assert!(result.contains("shell)"));
     }
 
@@ -730,19 +730,19 @@ mod tests {
 
     #[test]
     fn setup_updates_stale_bash_wrapper() {
-        let stale = "# gvm init\neval \"$(gvm env --shell bash)\"\n\n# gvm wrapper\ngvm() { command gvm \"$@\"; }\n";
+        let stale = "# gvsn init\neval \"$(gvsn env --shell bash)\"\n\n# gvsn wrapper\ngvsn() { command gvsn \"$@\"; }\n";
         let result = run_inject(&Bash, stale);
         assert!(result.contains("shell)"), "shell case must be injected");
         assert!(
-            !result.contains("command gvm \"$@\"; }"),
+            !result.contains("command gvsn \"$@\"; }"),
             "old stub must be removed"
         );
-        assert!(result.contains("# gvm init"), "init block must survive");
+        assert!(result.contains("# gvsn init"), "init block must survive");
     }
 
     #[test]
     fn setup_updates_stale_zsh_wrapper() {
-        let stale = "# gvm init\neval \"$(gvm env --shell zsh)\"\n\n# gvm wrapper\ngvm() { command gvm \"$@\"; }\n";
+        let stale = "# gvsn init\neval \"$(gvsn env --shell zsh)\"\n\n# gvsn wrapper\ngvsn() { command gvsn \"$@\"; }\n";
         let result = run_inject(&Zsh, stale);
         assert!(result.contains("shell)"));
         assert!(result.contains("--shell zsh"));
@@ -750,7 +750,7 @@ mod tests {
 
     #[test]
     fn setup_updates_stale_fish_wrapper() {
-        let stale = "# gvm init\ngvm env --shell fish | source\n\n# gvm wrapper\nfunction gvm\n    command gvm $argv\nend\n";
+        let stale = "# gvsn init\ngvsn env --shell fish | source\n\n# gvsn wrapper\nfunction gvsn\n    command gvsn $argv\nend\n";
         let result = run_inject(&Fish, stale);
         assert!(result.contains("contains -- $argv[1] shell"));
         assert!(
@@ -761,28 +761,28 @@ mod tests {
 
     #[test]
     fn setup_does_not_duplicate_init_block() {
-        let existing = "# gvm init\neval \"$(gvm env --shell bash)\"\n";
+        let existing = "# gvsn init\neval \"$(gvsn env --shell bash)\"\n";
         let result = run_inject(&Bash, existing);
-        let count = result.matches("# gvm init").count();
+        let count = result.matches("# gvsn init").count();
         assert_eq!(count, 1, "init marker must appear exactly once");
     }
 
     #[test]
     fn setup_updates_stale_fish_init_line() {
         let stale = format!(
-            "# gvm init\ngvm env --shell fish | source\n\n# gvm wrapper\n{}\n",
+            "# gvsn init\ngvsn env --shell fish | source\n\n# gvsn wrapper\n{}\n",
             Fish.wrapper_function()
         );
         let result = run_inject(&Fish, &stale);
         assert!(
-            result.contains("command -q gvm"),
+            result.contains("command -q gvsn"),
             "new guard must be present"
         );
         assert!(
-            !result.contains("\ngvm env --shell fish | source\n"),
+            !result.contains("\ngvsn env --shell fish | source\n"),
             "bare unguarded line must be replaced"
         );
-        let count = result.matches("# gvm init").count();
+        let count = result.matches("# gvsn init").count();
         assert_eq!(
             count, 1,
             "init marker must appear exactly once after update"

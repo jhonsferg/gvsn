@@ -1,17 +1,17 @@
-//! `gvm upgrade` - self-update the gvm binary.
+//! `gvsn upgrade` - self-update the gvsn binary.
 //!
-//! Queries the GitHub Releases API for the latest `jhonsferg/gvm-rs` release and
+//! Queries the GitHub Releases API for the latest `jhonsferg/gvsn` release and
 //! compares the published tag with the version embedded in this binary at
 //! compile time. When a newer version is available the correct platform archive
-//! is downloaded, the `gvm` binary is extracted from it, and the running
+//! is downloaded, the `gvsn` binary is extracted from it, and the running
 //! executable is replaced in-place.
 //!
 //! # Replacement strategy
 //!
-//! - **Unix**: the archive is downloaded to a temp file, `gvm` is extracted,
+//! - **Unix**: the archive is downloaded to a temp file, `gvsn` is extracted,
 //!   staged next to the target executable, and then atomically moved over the
 //!   current executable with `rename(2)`.
-//! - **Windows**: the archive is downloaded to a temp `.zip`, `gvm.exe` is
+//! - **Windows**: the archive is downloaded to a temp `.zip`, `gvsn.exe` is
 //!   extracted, copied into the install directory (a `rename` from the temp
 //!   directory can fail if it's on a different volume), the running binary is
 //!   renamed (freeing the name while it stays in use), then the staged binary
@@ -24,17 +24,17 @@ use std::path::Path;
 use crate::{
     archive::download,
     config::Config,
-    gvm_release::{api_base, parse_semver, GithubRelease, REPO},
+    gvsn_release::{api_base, parse_semver, GithubRelease, REPO},
     http::HttpClient,
     lock,
 };
 
-/// Returns the GitHub download base URL, overridable via `GVM_TEST_DL_BASE`.
+/// Returns the GitHub download base URL, overridable via `GVSN_TEST_DL_BASE`.
 fn dl_base() -> String {
-    std::env::var("GVM_TEST_DL_BASE").unwrap_or_else(|_| "https://github.com".to_owned())
+    std::env::var("GVSN_TEST_DL_BASE").unwrap_or_else(|_| "https://github.com".to_owned())
 }
 
-/// Checks for a newer gvm release and replaces the binary if one is found.
+/// Checks for a newer gvsn release and replaces the binary if one is found.
 ///
 /// When `force` is `true` the version comparison is skipped and the latest
 /// binary is always downloaded and installed.
@@ -89,7 +89,7 @@ pub fn run(config: &Config, client: &HttpClient, force: bool) -> Result<()> {
 
     if !force && current_parsed >= latest {
         println!();
-        println!("{} gvm is already up to date.", "✓".green());
+        println!("{} gvsn is already up to date.", "✓".green());
         return Ok(());
     }
 
@@ -112,7 +112,7 @@ pub fn run(config: &Config, client: &HttpClient, force: bool) -> Result<()> {
     let _ = std::fs::remove_file(&tmp_archive);
     let tmp_bin = tmp_bin?;
 
-    // Replace the running binary under a lock so two concurrent `gvm upgrade`
+    // Replace the running binary under a lock so two concurrent `gvsn upgrade`
     // invocations cannot interleave their rename steps against the same
     // executable path.
     let lock_path = config.root.join(".lock");
@@ -123,7 +123,7 @@ pub fn run(config: &Config, client: &HttpClient, force: bool) -> Result<()> {
 
     println!();
     println!(
-        "{} gvm upgraded to {}.",
+        "{} gvsn upgraded to {}.",
         "✓".green(),
         format!("v{latest_tag}").bold(),
     );
@@ -134,7 +134,7 @@ pub fn run(config: &Config, client: &HttpClient, force: bool) -> Result<()> {
 
 /// Returns the release archive name for the current platform and architecture.
 ///
-/// Convention: `gvm_{os}_{arch}.tar.gz` on Unix, `gvm_{os}_{arch}.zip` on
+/// Convention: `gvsn_{os}_{arch}.tar.gz` on Unix, `gvsn_{os}_{arch}.zip` on
 /// Windows. Arch names follow Go's `GOARCH` naming except that Linux/Darwin
 /// use `aarch64` for ARM64 to match the binary names in the release matrix.
 /// Windows ARM64 uses `arm64` to match Go's own naming.
@@ -173,26 +173,26 @@ fn release_archive_name() -> String {
 
     let ext = if cfg!(windows) { ".zip" } else { ".tar.gz" };
 
-    format!("gvm_{os}_{arch}{ext}")
+    format!("gvsn_{os}_{arch}{ext}")
 }
 
 /// Returns a temp path for the downloaded archive file.
 fn tmp_archive_path() -> Result<std::path::PathBuf> {
     let ext = if cfg!(windows) { ".zip" } else { ".tar.gz" };
-    Ok(std::env::temp_dir().join(format!("gvm-upgrade-{}{ext}", std::process::id())))
+    Ok(std::env::temp_dir().join(format!("gvsn-upgrade-{}{ext}", std::process::id())))
 }
 
-/// Extracts the `gvm` (or `gvm.exe`) binary from the downloaded archive into
+/// Extracts the `gvsn` (or `gvsn.exe`) binary from the downloaded archive into
 /// a new temporary file and returns its path.
 ///
 /// The extraction is self-contained: no system `tar`, `unzip`, or similar
 /// tool is required. The `flate2`, `tar`, and `zip` crates do the work.
 fn extract_upgrade_binary(archive: &Path) -> Result<std::path::PathBuf> {
-    let out = std::env::temp_dir().join(format!("gvm-upgrade-bin-{}", std::process::id()));
+    let out = std::env::temp_dir().join(format!("gvsn-upgrade-bin-{}", std::process::id()));
 
     #[cfg(not(windows))]
     {
-        let binary_filename = "gvm";
+        let binary_filename = "gvsn";
 
         let file = std::fs::File::open(archive)
             .with_context(|| format!("Cannot open archive {}", archive.display()))?;
@@ -212,7 +212,7 @@ fn extract_upgrade_binary(archive: &Path) -> Result<std::path::PathBuf> {
             if name == binary_filename {
                 entry
                     .unpack(&out)
-                    .context("Failed to extract gvm binary from archive")?;
+                    .context("Failed to extract gvsn binary from archive")?;
 
                 use std::os::unix::fs::PermissionsExt;
                 std::fs::set_permissions(&out, std::fs::Permissions::from_mode(0o755))
@@ -227,7 +227,7 @@ fn extract_upgrade_binary(archive: &Path) -> Result<std::path::PathBuf> {
 
     #[cfg(windows)]
     {
-        let binary_filename = "gvm.exe";
+        let binary_filename = "gvsn.exe";
 
         let file = std::fs::File::open(archive)
             .with_context(|| format!("Cannot open archive {}", archive.display()))?;
@@ -239,7 +239,7 @@ fn extract_upgrade_binary(archive: &Path) -> Result<std::path::PathBuf> {
                 let mut dest =
                     std::fs::File::create(&out).context("Cannot create temp binary file")?;
                 std::io::copy(&mut entry, &mut dest)
-                    .context("Failed to extract gvm.exe from zip")?;
+                    .context("Failed to extract gvsn.exe from zip")?;
                 return Ok(out);
             }
         }
@@ -248,7 +248,7 @@ fn extract_upgrade_binary(archive: &Path) -> Result<std::path::PathBuf> {
     }
 }
 
-/// Replaces the current gvm executable with the file at `new_binary`.
+/// Replaces the current gvsn executable with the file at `new_binary`.
 ///
 /// On Unix the new binary is first copied to a hidden temp file inside the
 /// same directory as the target executable (so that the final `rename(2)` is
@@ -258,7 +258,7 @@ fn extract_upgrade_binary(archive: &Path) -> Result<std::path::PathBuf> {
 /// name while keeping the file in use) and then the new binary takes the
 /// original name.
 fn replace_binary(new_binary: &Path) -> Result<()> {
-    let exe = std::env::current_exe().context("Cannot determine gvm binary location")?;
+    let exe = std::env::current_exe().context("Cannot determine gvsn binary location")?;
     replace_binary_at(new_binary, &exe)
 }
 
@@ -270,7 +270,7 @@ fn replace_binary_at(new_binary: &Path, exe: &Path) -> Result<()> {
     {
         use std::os::unix::fs::PermissionsExt;
 
-        let staged = exe.with_file_name(format!(".gvm-upgrade-{}", std::process::id()));
+        let staged = exe.with_file_name(format!(".gvsn-upgrade-{}", std::process::id()));
 
         if let Err(e) = std::fs::copy(new_binary, &staged) {
             let _ = std::fs::remove_file(new_binary);
@@ -296,14 +296,14 @@ fn replace_binary_at(new_binary: &Path, exe: &Path) -> Result<()> {
         // directory with `copy` first - same pattern already used on Unix
         // and in `fs::move_dir` - so the swap below is always a same-volume
         // rename.
-        let staged = exe.with_file_name(format!("gvm-upgrade-{}.exe", std::process::id()));
+        let staged = exe.with_file_name(format!("gvsn-upgrade-{}.exe", std::process::id()));
         if let Err(e) = std::fs::copy(new_binary, &staged) {
             let _ = std::fs::remove_file(new_binary);
             return Err(e).context("Cannot stage new binary in install directory");
         }
         let _ = std::fs::remove_file(new_binary);
 
-        let old = exe.with_file_name("gvm.exe.old");
+        let old = exe.with_file_name("gvsn.exe.old");
         if let Err(e) = std::fs::rename(exe, &old) {
             let _ = std::fs::remove_file(&staged);
             return Err(e)
@@ -332,9 +332,9 @@ mod tests {
 
     /// Binary filename expected inside the release archive on this platform.
     #[cfg(not(windows))]
-    const BIN_NAME: &str = "gvm";
+    const BIN_NAME: &str = "gvsn";
     #[cfg(windows)]
-    const BIN_NAME: &str = "gvm.exe";
+    const BIN_NAME: &str = "gvsn.exe";
 
     /// Builds a fixture archive (tar.gz on Unix, zip on Windows) containing a
     /// single file named `BIN_NAME` with the given content, and writes it to
@@ -366,7 +366,7 @@ mod tests {
     fn extract_upgrade_binary_finds_and_extracts_entry() {
         let dir = tempdir().unwrap();
         let archive_ext = if cfg!(windows) { "zip" } else { "tar.gz" };
-        let archive_path = dir.path().join(format!("gvm.{archive_ext}"));
+        let archive_path = dir.path().join(format!("gvsn.{archive_ext}"));
         write_fixture_archive(&archive_path, b"fake binary contents");
 
         let extracted = extract_upgrade_binary(&archive_path).unwrap();
@@ -403,7 +403,7 @@ mod tests {
     #[test]
     fn replace_binary_at_swaps_target_with_new_binary() {
         let dir = tempdir().unwrap();
-        let target = dir.path().join("gvm-fake-exe");
+        let target = dir.path().join("gvsn-fake-exe");
         std::fs::write(&target, b"old contents").unwrap();
 
         let new_binary = dir.path().join("staged-new-binary");
@@ -419,7 +419,7 @@ mod tests {
     #[test]
     fn archive_name_has_correct_format() {
         let name = release_archive_name();
-        assert!(name.starts_with("gvm_"));
+        assert!(name.starts_with("gvsn_"));
         #[cfg(windows)]
         assert!(name.ends_with(".zip"));
         #[cfg(not(windows))]

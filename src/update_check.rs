@@ -1,12 +1,12 @@
-//! Background "a new gvm version is available" notifier.
+//! Background "a new gvsn version is available" notifier.
 //!
 //! Modeled on the update notices shown by tools like npm: after any regular
-//! command finishes, if a newer `gvm` release exists on GitHub, a short
-//! colored note is printed to stderr suggesting `gvm upgrade`.
+//! command finishes, if a newer `gvsn` release exists on GitHub, a short
+//! colored note is printed to stderr suggesting `gvsn upgrade`.
 //!
 //! # Design
 //!
-//! - **Cached**: the result is cached in `<GVM_DIR>/update-check.json` for
+//! - **Cached**: the result is cached in `<GVSN_DIR>/update-check.json` for
 //!   24 hours, so this never makes a network request on every invocation.
 //! - **Non-blocking**: [`spawn`] starts the check on a background thread as
 //!   early as possible (before the command's own work), so on a cache miss
@@ -22,7 +22,7 @@
 //!   prompt/`cd` via the shell hook (`env`, `path`, `shell`), for
 //!   `completions` (piped straight into a completion file), or for
 //!   `upgrade` itself (redundant). Also skipped entirely when
-//!   `GVM_NO_UPDATE_CHECK` or `CI` is set.
+//!   `GVSN_NO_UPDATE_CHECK` or `CI` is set.
 
 use std::path::Path;
 use std::sync::mpsc::{self, Receiver};
@@ -33,9 +33,9 @@ use colored::Colorize;
 
 use crate::cli::Command;
 use crate::config::Config;
-use crate::gvm_release;
+use crate::gvsn_release;
 
-/// Cache file name, relative to the gvm root directory (`GVM_DIR`).
+/// Cache file name, relative to the gvsn root directory (`GVSN_DIR`).
 const CACHE_FILE: &str = "update-check.json";
 
 /// How long a cached "latest version" result is trusted before a fresh
@@ -69,7 +69,7 @@ type PendingCheck = (Receiver<Option<NewerVersion>>, Instant);
 /// Starts the background version check, unless suppressed.
 ///
 /// Returns `None` immediately (no thread spawned) when the check should not
-/// run for `command`, or when `GVM_NO_UPDATE_CHECK`/`CI` is set. Otherwise
+/// run for `command`, or when `GVSN_NO_UPDATE_CHECK`/`CI` is set. Otherwise
 /// returns a receiver that will eventually carry `Some((current, latest))`
 /// if a newer version was found, or `None` if not (or the check failed).
 pub fn spawn(config: &Config, command: &Command) -> Option<PendingCheck> {
@@ -106,7 +106,7 @@ pub fn print_if_ready(check: Option<PendingCheck>) {
 fn should_run_for(command: &Command) -> bool {
     should_run_for_env(
         command,
-        std::env::var_os("GVM_NO_UPDATE_CHECK").is_some(),
+        std::env::var_os("GVSN_NO_UPDATE_CHECK").is_some(),
         std::env::var_os("CI").is_some(),
     )
 }
@@ -140,7 +140,7 @@ fn check(root: &Path, current: &str) -> Option<NewerVersion> {
     let latest = match load_cache(&cache_path) {
         Some(cache) if !is_stale(cache.last_checked_unix, now) => cache.latest_version,
         _ => {
-            let version = gvm_release::fetch_latest_version(CHECK_TIMEOUT).ok()?;
+            let version = gvsn_release::fetch_latest_version(CHECK_TIMEOUT).ok()?;
             let _ = save_cache(
                 &cache_path,
                 &UpdateCache {
@@ -152,8 +152,8 @@ fn check(root: &Path, current: &str) -> Option<NewerVersion> {
         }
     };
 
-    let latest_parsed = gvm_release::parse_semver(&latest)?;
-    let current_parsed = gvm_release::parse_semver(current)?;
+    let latest_parsed = gvsn_release::parse_semver(&latest)?;
+    let current_parsed = gvsn_release::parse_semver(current)?;
 
     if latest_parsed > current_parsed {
         Some((current.to_string(), latest))
@@ -193,7 +193,7 @@ fn format_notice(current: &str, latest: &str) -> String {
         format!("v{current}").dimmed(),
         "→".dimmed(),
         format!("v{latest}").bold().green(),
-        "gvm upgrade".cyan()
+        "gvsn upgrade".cyan()
     )
 }
 
@@ -325,6 +325,6 @@ mod tests {
         let msg = format_notice("1.9.2", "1.10.0");
         assert!(msg.contains("1.9.2"));
         assert!(msg.contains("1.10.0"));
-        assert!(msg.contains("gvm upgrade"));
+        assert!(msg.contains("gvsn upgrade"));
     }
 }

@@ -1,4 +1,4 @@
-//! `gvm setup` - configure the shell environment for gvm.
+//! `gvsn setup` - configure the shell environment for gvsn.
 //!
 //! Responsible for ALL environment configuration: shell hooks, static PATH
 //! entries in login profiles (Linux/macOS), and registry PATH entries
@@ -6,29 +6,29 @@
 //!
 //! # What this command does
 //!
-//! 1. Injects `# gvm init` + `# gvm wrapper` into the shell's interactive
+//! 1. Injects `# gvsn init` + `# gvsn wrapper` into the shell's interactive
 //!    profile (e.g. `~/.bashrc`).
-//! 2. On Linux/macOS: injects `# gvm path` into the login profile
-//!    (`~/.profile` for bash, `~/.zprofile` for zsh) so `~/.gvm/current/bin`
+//! 2. On Linux/macOS: injects `# gvsn path` into the login profile
+//!    (`~/.profile` for bash, `~/.zprofile` for zsh) so `~/.gvsn/current/bin`
 //!    is on PATH for GUI applications (VSCode, GoLand, etc.) that do not
 //!    source the interactive profile.
-//! 3. On Windows: adds the gvm binary directory and `~\.gvm\current\bin` to
+//! 3. On Windows: adds the gvsn binary directory and `~\.gvsn\current\bin` to
 //!    the user PATH in the registry so all applications see them.
 //!
 //! # `--reset` flag
 //!
-//! Strips every `# gvm ...` block from the interactive and login profiles
+//! Strips every `# gvsn ...` block from the interactive and login profiles
 //! (and the Windows registry on Windows), then re-applies clean configuration.
-//! Only gvm-managed blocks are touched; all other content is preserved.
+//! Only gvsn-managed blocks are touched; all other content is preserved.
 
 use anyhow::Result;
 use colored::Colorize;
 
 use crate::{shell, shell::ShellConfig};
 
-/// Runs `gvm setup`, optionally with a full reset.
+/// Runs `gvsn setup`, optionally with a full reset.
 ///
-/// `shell_str` overrides auto-detection. `reset` strips all previous gvm
+/// `shell_str` overrides auto-detection. `reset` strips all previous gvsn
 /// configuration before re-applying.
 ///
 /// # Errors
@@ -70,9 +70,9 @@ pub fn run(shell_str: Option<&str>, reset: bool) -> Result<()> {
         },
     };
 
-    println!("Setting up gvm for {}...", sh.name().bold());
+    println!("Setting up gvsn for {}...", sh.name().bold());
 
-    // ---- Optional reset: strip all previous gvm config ----------------------
+    // ---- Optional reset: strip all previous gvsn config ----------------------
     if reset {
         strip_all(sh.as_ref())?;
         println!();
@@ -81,30 +81,30 @@ pub fn run(shell_str: Option<&str>, reset: bool) -> Result<()> {
     }
 
     // ---- Interactive profile: eval hook + wrapper ---------------------------
-    let gvm_bin_dir = std::env::current_exe()
+    let gvsn_bin_dir = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(std::path::PathBuf::from));
-    shell::inject_profile(sh.as_ref(), gvm_bin_dir.as_deref())?;
+    shell::inject_profile(sh.as_ref(), gvsn_bin_dir.as_deref())?;
 
     // ---- Login profile (Linux/macOS): static PATH for GUI apps --------------
     #[cfg(not(target_os = "windows"))]
     shell::inject_login_profile(sh.as_ref())?;
 
-    // ---- Windows registry: PATH entries for gvm binary + current/bin --------
+    // ---- Windows registry: PATH entries for gvsn binary + current/bin --------
     #[cfg(target_os = "windows")]
     inject_windows_registry()?;
 
-    // ---- Warn if gvm binary itself is not yet on PATH -----------------------
-    if !shell::gvm_in_path() {
+    // ---- Warn if gvsn binary itself is not yet on PATH -----------------------
+    if !shell::gvsn_in_path() {
         if let Ok(exe) = std::env::current_exe() {
             let dir = exe
                 .parent()
                 .map(|p| p.display().to_string())
                 .unwrap_or_default();
             println!();
-            println!("{} gvm is not in PATH yet.", "!".yellow());
+            println!("{} gvsn is not in PATH yet.", "!".yellow());
             println!(
-                "  Add {} to your PATH so the shell hook can call 'gvm path'.",
+                "  Add {} to your PATH so the shell hook can call 'gvsn path'.",
                 dir.cyan()
             );
         }
@@ -138,7 +138,7 @@ fn hint_for_stale_detected_shell(available: &[&str]) -> String {
         "No supported shells found in PATH. Install bash, zsh, or fish first.".to_string()
     } else {
         format!(
-            "Try: gvm setup --shell {}",
+            "Try: gvsn setup --shell {}",
             available.first().copied().unwrap_or("bash")
         )
     }
@@ -159,14 +159,14 @@ fn hint_for_no_shell_detected(available: &[&str]) -> String {
 
 // --- Reset helpers -----------------------------------------------------------
 
-/// Strips all gvm-managed blocks from the interactive profile and, on
+/// Strips all gvsn-managed blocks from the interactive profile and, on
 /// non-Windows, from the login profile as well.
 fn strip_all(sh: &dyn ShellConfig) -> Result<()> {
     // Interactive profile (e.g. ~/.bashrc)
     if let Some(p) = sh.profile_path() {
         match shell::strip_profile(&p) {
             Ok(true) => println!("  {} Cleaned {}", "✓".green(), p.display()),
-            Ok(false) => println!("  No gvm config found in {}", p.display()),
+            Ok(false) => println!("  No gvsn config found in {}", p.display()),
             Err(e) => println!("  {} Could not clean {}: {e}", "!".yellow(), p.display()),
         }
     }
@@ -176,7 +176,7 @@ fn strip_all(sh: &dyn ShellConfig) -> Result<()> {
     if let Some(p) = sh.login_profile_path() {
         match shell::strip_profile(&p) {
             Ok(true) => println!("  {} Cleaned {}", "✓".green(), p.display()),
-            Ok(false) => println!("  No gvm config found in {}", p.display()),
+            Ok(false) => println!("  No gvsn config found in {}", p.display()),
             Err(e) => println!("  {} Could not clean {}: {e}", "!".yellow(), p.display()),
         }
     }
@@ -195,7 +195,7 @@ fn strip_all(sh: &dyn ShellConfig) -> Result<()> {
 /// Windows paths are case-insensitive, so a PATH entry that differs from
 /// `candidate` only in case (e.g. a different drive-letter casing from
 /// another shell) still counts as present - comparing `Path` values directly
-/// would miss this and insert a duplicate entry on every `gvm setup` run.
+/// would miss this and insert a duplicate entry on every `gvsn setup` run.
 ///
 /// Kept unconditional (not `#[cfg(windows)]`) so its logic is unit-tested on
 /// every platform; its only production caller, `inject_windows_registry`, is
@@ -215,8 +215,8 @@ fn path_already_present(entries: &[String], candidate: &std::path::Path) -> bool
 /// spawns - the Start Menu, the taskbar, double-clicking an `.exe`) keeps its
 /// own copy of the environment from whenever it last started, and normally
 /// only refreshes it on this broadcast, a logoff, or a restart. Without it, a
-/// GUI application like VS Code or GoLand launched right after `gvm setup`/
-/// `gvm use` still sees the *old* PATH and fails to find `go`, even though
+/// GUI application like VS Code or GoLand launched right after `gvsn setup`/
+/// `gvsn use` still sees the *old* PATH and fails to find `go`, even though
 /// any terminal opened afterward works fine (terminals inherit PATH fresh
 /// from Explorer at spawn time once Explorer itself has the update).
 ///
@@ -249,7 +249,7 @@ fn broadcast_environment_change() {
     }
 }
 
-/// Adds the gvm binary directory and `~\.gvm\current\bin` to the user PATH
+/// Adds the gvsn binary directory and `~\.gvsn\current\bin` to the user PATH
 /// in the Windows registry (HKCU\Environment).
 ///
 /// Idempotent: entries that are already present are not duplicated.
@@ -273,7 +273,7 @@ fn inject_windows_registry() -> Result<()> {
 
     let mut changed = false;
 
-    // gvm binary directory
+    // gvsn binary directory
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             let dir_str = dir.to_string_lossy().to_string();
@@ -287,9 +287,9 @@ fn inject_windows_registry() -> Result<()> {
         }
     }
 
-    // ~/.gvm/current/bin
+    // ~/.gvsn/current/bin
     if let Some(home) = dirs::home_dir() {
-        let current_bin = home.join(".gvm").join("current").join("bin");
+        let current_bin = home.join(".gvsn").join("current").join("bin");
         let current_bin_str = current_bin.to_string_lossy().to_string();
         if !path_already_present(&entries, &current_bin) {
             entries.insert(0, current_bin_str);
@@ -315,7 +315,7 @@ fn inject_windows_registry() -> Result<()> {
     Ok(())
 }
 
-/// Removes all gvm-managed entries from the Windows user PATH in the registry.
+/// Removes all gvsn-managed entries from the Windows user PATH in the registry.
 #[cfg(target_os = "windows")]
 fn strip_windows_registry() -> Result<()> {
     use anyhow::Context;
@@ -329,15 +329,15 @@ fn strip_windows_registry() -> Result<()> {
 
     let current_path: String = env.get_value("PATH").unwrap_or_default();
 
-    // Remove any entry that is inside the user's .gvm directory.
+    // Remove any entry that is inside the user's .gvsn directory.
     let home = dirs::home_dir().unwrap_or_default();
-    let gvm_root = home.join(".gvm");
+    let gvsn_root = home.join(".gvsn");
 
     let filtered: Vec<&str> = current_path
         .split(';')
         .filter(|e| {
             let p = std::path::Path::new(e);
-            !p.starts_with(&gvm_root)
+            !p.starts_with(&gvsn_root)
         })
         .collect();
 
@@ -347,7 +347,7 @@ fn strip_windows_registry() -> Result<()> {
             .context("Cannot write PATH to HKCU\\Environment")?;
         broadcast_environment_change();
         println!(
-            "  {} Removed gvm entries from user PATH (registry)",
+            "  {} Removed gvsn entries from user PATH (registry)",
             "✓".green()
         );
     }
@@ -376,15 +376,15 @@ mod tests {
 
     #[test]
     fn path_already_present_matches_case_insensitively() {
-        let entries = vec![r"C:\Users\jhon\.gvm\current\bin".to_string()];
-        let candidate = std::path::Path::new(r"c:\users\jhon\.gvm\current\bin");
+        let entries = vec![r"C:\Users\jhon\.gvsn\current\bin".to_string()];
+        let candidate = std::path::Path::new(r"c:\users\jhon\.gvsn\current\bin");
         assert!(path_already_present(&entries, candidate));
     }
 
     #[test]
     fn path_already_present_is_false_for_unrelated_entry() {
         let entries = vec![r"C:\Users\jhon\.cargo\bin".to_string()];
-        let candidate = std::path::Path::new(r"C:\Users\jhon\.gvm\current\bin");
+        let candidate = std::path::Path::new(r"C:\Users\jhon\.gvsn\current\bin");
         assert!(!path_already_present(&entries, candidate));
     }
 
@@ -408,7 +408,7 @@ mod tests {
     fn hint_for_stale_detected_shell_suggests_first_available() {
         assert_eq!(
             hint_for_stale_detected_shell(&["zsh", "fish"]),
-            "Try: gvm setup --shell zsh"
+            "Try: gvsn setup --shell zsh"
         );
     }
 
@@ -461,10 +461,10 @@ mod tests {
             Some(self.login_profile.clone())
         }
         fn init_line(&self) -> &'static str {
-            "eval gvm"
+            "eval gvsn"
         }
         fn wrapper_function(&self) -> &'static str {
-            "gvm() { command gvm \"$@\"; }"
+            "gvsn() { command gvsn \"$@\"; }"
         }
         fn shell_version_script(
             &self,
@@ -488,31 +488,31 @@ mod tests {
             login_profile: dir.path().join("login_profile"),
         };
 
-        // Seed both files with gvm-managed blocks plus user content.
+        // Seed both files with gvsn-managed blocks plus user content.
         std::fs::write(
             &sh.profile,
-            "# user\nexport FOO=bar\n\n# gvm init\neval gvm\n",
+            "# user\nexport FOO=bar\n\n# gvsn init\neval gvsn\n",
         )
         .unwrap();
         std::fs::write(
             &sh.login_profile,
-            "# gvm path\nexport PATH=\"$HOME/.gvm/current/bin:$PATH\"\n",
+            "# gvsn path\nexport PATH=\"$HOME/.gvsn/current/bin:$PATH\"\n",
         )
         .unwrap();
 
         strip_all(&sh).unwrap();
 
         let profile_content = std::fs::read_to_string(&sh.profile).unwrap();
-        assert!(!profile_content.contains("# gvm init"));
+        assert!(!profile_content.contains("# gvsn init"));
         assert!(profile_content.contains("export FOO=bar"));
 
         let login_content = std::fs::read_to_string(&sh.login_profile).unwrap();
-        assert!(!login_content.contains("# gvm path"));
+        assert!(!login_content.contains("# gvsn path"));
     }
 
     #[cfg(not(target_os = "windows"))]
     #[test]
-    fn strip_all_is_a_noop_on_files_without_gvm_config() {
+    fn strip_all_is_a_noop_on_files_without_gvsn_config() {
         let dir = tempfile::tempdir().unwrap();
         let sh = FakeShell {
             profile: dir.path().join("profile"),

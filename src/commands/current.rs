@@ -1,4 +1,4 @@
-//! `gvm current` - print the active Go version and its source.
+//! `gvsn current` - print the active Go version and its source.
 //!
 //! The source indicates whether the version was determined from a local
 //! `.go-version` file (`local (.go-version)`) or from the global default

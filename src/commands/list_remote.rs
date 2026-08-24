@@ -1,4 +1,4 @@
-//! `gvm list-remote` - list Go versions available from go.dev.
+//! `gvsn list-remote` - list Go versions available from go.dev.
 //!
 //! By default shows only the latest patch release per minor version (compact
 //! view). Passing `--all` shows every patch release in the index.
@@ -92,7 +92,7 @@ pub fn run(config: &Config, client: &HttpClient, all: bool, json: bool) -> Resul
     if !all {
         println!(
             "\n  Use {} to see all patch releases.",
-            "gvm list-remote --all".cyan()
+            "gvsn list-remote --all".cyan()
         );
     }
     Ok(())
@@ -127,7 +127,7 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn run_creates_gvm_root_before_fetching() {
+    fn run_creates_gvsn_root_before_fetching() {
         // config.root does not exist yet (only the tempdir it lives under
         // does) - regression test for the fix that ensures `ensure_dirs()`
         // runs before `fetch_releases` tries to write the release-index

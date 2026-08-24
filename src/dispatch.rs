@@ -15,7 +15,7 @@ use crate::{
     http::HttpClient,
 };
 
-/// Trait for all gvm commands.
+/// Trait for all gvsn commands.
 ///
 /// Each command implements this trait to provide its name, description,
 /// and execution logic. Commands are registered in the global registry
