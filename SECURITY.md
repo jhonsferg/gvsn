@@ -145,12 +145,13 @@ but every credible report will be investigated and escalated to GitHub Trust & S
 
 > ℹ️ The case below predates this project's rename from `gvm-rs` to `gvsn` (August 2026) and is
 > preserved exactly as reported at the time - the clone impersonated the project under its former
-> name, and the linked issue lives in the project's original repository,
-> [`jhonsferg/gvm-rs`](https://github.com/jhonsferg/gvm-rs).
+> name. The project's original repository, `jhonsferg/gvm-rs`, has since been deleted, so the
+> issue link below no longer resolves; the full technical record survives in this project's own
+> incident reports, linked below.
 
 - **[`Foremost-headsail607/gvm-rs`](https://github.com/Foremost-headsail607/gvm-rs)** - flagged by
-  this repository's automated clone-watch (see
-  [issue #53](https://github.com/jhonsferg/gvm-rs/issues/53)). It reuses this project's name and
+  this repository's automated clone-watch (see issue #53, `jhonsferg/gvm-rs#53` - no longer
+  reachable, see note above). It reuses this project's name and
   description, but does **not** distribute binaries through GitHub Releases like the real pipeline
   does - its README links directly to an archive committed inside `src/`
   (`gvm-rs-xiphisternal.zip`), bypassing this repository's build, checksum, and
