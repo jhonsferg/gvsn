@@ -23,8 +23,8 @@ jobs:
   # ── Cross-compile for every supported target ──────────────────────────────────
   #
   # Naming convention (must stay in sync with upgrade.rs::release_archive_name()):
-  #   Archive : gvm_{os}_{arch}.tar.gz  - Linux / macOS
-  #   Archive : gvm_{os}_{arch}.zip     - Windows
+  #   Archive : gvsn_{os}_{arch}.tar.gz  - Linux / macOS
+  #   Archive : gvsn_{os}_{arch}.zip     - Windows
   build:
     name: Build ${{ matrix.artifact_archive }}
     runs-on: ${{ matrix.os }}
@@ -37,96 +37,96 @@ jobs:
           # ── Linux x86_64 - 100% static musl binary ────────────────────────────
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
-            binary_name: gvm
-            artifact_archive: gvm_linux_x86_64.tar.gz
+            binary_name: gvsn
+            artifact_archive: gvsn_linux_x86_64.tar.gz
             archive_type: tar
             use_cross: false
 
           # ── Linux aarch64 - static musl (cross + Docker) ─────────────────────
           - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
-            binary_name: gvm
-            artifact_archive: gvm_linux_aarch64.tar.gz
+            binary_name: gvsn
+            artifact_archive: gvsn_linux_aarch64.tar.gz
             archive_type: tar
             use_cross: true
 
           # ── Android aarch64 - bionic libc (Termux) ───────────────────────────
           - os: ubuntu-latest
             target: aarch64-linux-android
-            binary_name: gvm
-            artifact_archive: gvm_android_aarch64.tar.gz
+            binary_name: gvsn
+            artifact_archive: gvsn_android_aarch64.tar.gz
             archive_type: tar
             use_cross: true
 
           # ── Linux armv7 - static musl (cross + Docker) ───────────────────────
           - os: ubuntu-latest
             target: armv7-unknown-linux-musleabihf
-            binary_name: gvm
-            artifact_archive: gvm_linux_armv7.tar.gz
+            binary_name: gvsn
+            artifact_archive: gvsn_linux_armv7.tar.gz
             archive_type: tar
             use_cross: true
 
           # ── Linux 386 - static musl (cross + Docker) ─────────────────────────
           - os: ubuntu-latest
             target: i686-unknown-linux-musl
-            binary_name: gvm
-            artifact_archive: gvm_linux_386.tar.gz
+            binary_name: gvsn
+            artifact_archive: gvsn_linux_386.tar.gz
             archive_type: tar
             use_cross: true
 
           # ── Linux riscv64 - gnu (no stable musl target) ───────────────────────
           - os: ubuntu-latest
             target: riscv64gc-unknown-linux-gnu
-            binary_name: gvm
-            artifact_archive: gvm_linux_riscv64.tar.gz
+            binary_name: gvsn
+            artifact_archive: gvsn_linux_riscv64.tar.gz
             archive_type: tar
             use_cross: true
 
           # ── Linux s390x - gnu (IBM Z mainframe) ───────────────────────────────
           - os: ubuntu-latest
             target: s390x-unknown-linux-gnu
-            binary_name: gvm
-            artifact_archive: gvm_linux_s390x.tar.gz
+            binary_name: gvsn
+            artifact_archive: gvsn_linux_s390x.tar.gz
             archive_type: tar
             use_cross: true
 
           # ── Linux ppc64le - gnu (IBM POWER LE) ───────────────────────────────
           - os: ubuntu-latest
             target: powerpc64le-unknown-linux-gnu
-            binary_name: gvm
-            artifact_archive: gvm_linux_ppc64le.tar.gz
+            binary_name: gvsn
+            artifact_archive: gvsn_linux_ppc64le.tar.gz
             archive_type: tar
             use_cross: true
 
           # ── macOS x86_64 (Intel) ──────────────────────────────────────────────
           - os: macos-latest
             target: x86_64-apple-darwin
-            binary_name: gvm
-            artifact_archive: gvm_darwin_x86_64.tar.gz
+            binary_name: gvsn
+            artifact_archive: gvsn_darwin_x86_64.tar.gz
             archive_type: tar
             use_cross: false
 
           # ── macOS aarch64 (Apple Silicon) ─────────────────────────────────────
           - os: macos-latest
             target: aarch64-apple-darwin
-            binary_name: gvm
-            artifact_archive: gvm_darwin_aarch64.tar.gz
+            binary_name: gvsn
+            artifact_archive: gvsn_darwin_aarch64.tar.gz
             archive_type: tar
             use_cross: false
 
           # ── Windows x86_64 (MSVC) ─────────────────────────────────────────────
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            binary_name: gvm.exe
-            artifact_archive: gvm_windows_x86_64.zip
+            binary_name: gvsn.exe
+            artifact_archive: gvsn_windows_x86_64.zip
             archive_type: zip
             use_cross: false
 
           # ── Windows arm64 (MSVC cross-compile) ───────────────────────────────
           - os: windows-latest
             target: aarch64-pc-windows-msvc
-            binary_name: gvm.exe
-            artifact_archive: gvm_windows_arm64.zip
+            binary_name: gvsn.exe
+            artifact_archive: gvsn_windows_arm64.zip
             archive_type: zip
             use_cross: false
 
@@ -146,7 +146,7 @@ jobs:
       # ── Embed the tag version into Cargo.toml before compiling ───────────────
       #
       # The tag (e.g. v1.1.0) is stripped of its leading 'v' and written into
-      # Cargo.toml and Cargo.lock so that `gvm --version` and the upgrade check
+      # Cargo.toml and Cargo.lock so that `gvsn --version` and the upgrade check
       # report the correct version without committing anything to main.
       #
       # sed note: macOS uses BSD sed which does not support GNU-only 0,/pat/
@@ -160,9 +160,9 @@ jobs:
           # Cargo.toml - simple substitution, no GNU-only address ranges
           sed -i.bak 's/^version = "[^"]*"/version = "'"${VERSION}"'"/' Cargo.toml
           rm -f Cargo.toml.bak
-          # Cargo.lock - stateful perl: set flag on name = "gvm", replace version on next line.
+          # Cargo.lock - stateful perl: set flag on name = "gvsn", replace version on next line.
           # \r? makes the pattern work on both LF (Linux/macOS) and CRLF (Windows checkout).
-          perl -i.bak -pe 'if (/^name = "gvm-rs"\r?$/) { $f=1 } elsif ($f) { s/^version = "[^"]*"/version = "'"${VERSION}"'"/; $f=0 }' Cargo.lock
+          perl -i.bak -pe 'if (/^name = "gvsn"\r?$/) { $f=1 } elsif ($f) { s/^version = "[^"]*"/version = "'"${VERSION}"'"/; $f=0 }' Cargo.lock
           rm -f Cargo.lock.bak
           echo "Version set to ${VERSION}"
           grep '^version' Cargo.toml
@@ -193,23 +193,23 @@ jobs:
         if: matrix.archive_type == 'tar'
         shell: bash
         run: |
-          cp "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" gvm
-          tar czf "${{ matrix.artifact_archive }}" gvm
-          rm gvm
+          cp "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" gvsn
+          tar czf "${{ matrix.artifact_archive }}" gvsn
+          rm gvsn
 
       - name: Package archive (zip - Windows)
         if: matrix.archive_type == 'zip'
         shell: pwsh
         run: |
-          Copy-Item "target\${{ matrix.target }}\release\${{ matrix.binary_name }}" gvm.exe
-          Compress-Archive -Path gvm.exe `
+          Copy-Item "target\${{ matrix.target }}\release\${{ matrix.binary_name }}" gvsn.exe
+          Compress-Archive -Path gvsn.exe `
                            -DestinationPath "${{ matrix.artifact_archive }}" `
                            -Force
-          Remove-Item gvm.exe
+          Remove-Item gvsn.exe
 
       # ── Code signing (not wired in yet - see SECURITY.md) ─────────────────────
       #
-      # Windows archives ship unsigned for now. gvm-rs has applied to OSSign
+      # Windows archives ship unsigned for now. gvsn has applied to OSSign
       # (https://ossign.org), a free code-signing service for open-source
       # projects, but their applications are currently suspended due to
       # backlog - see SECURITY.md for status and what activating this will
@@ -258,7 +258,7 @@ jobs:
       - name: Generate checksums.txt
         working-directory: dist
         run: |
-          sha256sum gvm_* > checksums.txt
+          sha256sum gvsn_* > checksums.txt
           echo ""
           echo "=== checksums.txt ==="
           cat checksums.txt
@@ -355,7 +355,7 @@ jobs:
             echo "irm https://raw.githubusercontent.com/${REPO}/main/install/install.ps1 | iex"
             echo ""
             echo "# Or upgrade in-place"
-            echo "gvm upgrade"
+            echo "gvsn upgrade"
             echo "\`\`\`"
             echo ""
             echo "\`\`\`sh"
@@ -363,7 +363,7 @@ jobs:
             echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/main/install/install.sh | sh"
             echo ""
             echo "# Or upgrade in-place"
-            echo "gvm upgrade"
+            echo "gvsn upgrade"
             echo "\`\`\`"
           } > /tmp/release_notes.md
 
@@ -384,13 +384,13 @@ jobs:
             echo "Release ${TAG} already exists - updating it instead of creating"
             gh release edit "$TAG" \
               --repo "${{ github.repository }}" \
-              --title "gvm ${TAG}" \
+              --title "gvsn ${TAG}" \
               --notes-file /tmp/release_notes.md \
               --latest
           else
             gh release create "$TAG" \
               --repo "${{ github.repository }}" \
-              --title "gvm ${TAG}" \
+              --title "gvsn ${TAG}" \
               --notes-file /tmp/release_notes.md \
               --latest \
               --verify-tag
@@ -423,7 +423,7 @@ jobs:
           update_release_body: true
           request_rate: 4
           files: |
-            dist/gvm_*
+            dist/gvsn_*
 
       # ── Workflow job summary ───────────────────────────────────────────────────
 
@@ -435,7 +435,7 @@ jobs:
             echo ""
             echo "| File | Size | Purpose |"
             echo "|------|------|---------|"
-            for f in dist/gvm_*; do
+            for f in dist/gvsn_*; do
               [ -f "$f" ] || continue
               printf "| \`%s\` | %s | install archive |\n" \
                 "$(basename "$f")" "$(du -h "$f" | cut -f1)"
