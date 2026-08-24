@@ -678,7 +678,10 @@ mod tests {
                     let after = &content[pos + INIT_MARKER.len()..];
                     let end = pos
                         + INIT_MARKER.len()
-                        + after.find("\n# gvsn ").map(|i| i + 1).unwrap_or(after.len());
+                        + after
+                            .find("\n# gvsn ")
+                            .map(|i| i + 1)
+                            .unwrap_or(after.len());
                     let new_block = format!("{INIT_MARKER}\n{init_content}\n");
                     content = format!("{}{}{}", &content[..pos], new_block, &content[end..]);
                 }
