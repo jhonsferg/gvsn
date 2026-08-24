@@ -4,7 +4,10 @@
 //! 1. The entire gvsn data directory (`~/.gvsn`) containing all installed Go
 //!    versions.
 //! 2. The `gvsn` binary itself.
-//! 3. Every gvsn-managed line from the detected shell's profile file.
+//! 3. Every gvsn-managed line from the detected shell's profile file, and
+//!    from the login profile on Linux/macOS.
+//! 4. On Windows, the gvsn entries in the user PATH registry key
+//!    (`HKCU\Environment`) that `gvsn setup` added.
 //!
 //! A summary of what will be deleted is always printed before any action is
 //! taken. When `--force` is omitted the user must confirm with `y`/`yes`.
@@ -57,6 +60,11 @@ pub fn run(config: &Config, force: bool) -> Result<()> {
     if let Some(ref p) = profile_path {
         println!("  {} {} (gvsn lines removed)", "->".cyan(), p.display());
     }
+    #[cfg(target_os = "windows")]
+    println!(
+        "  {} gvsn entries in the user PATH registry key (HKCU\\Environment)",
+        "->".cyan()
+    );
     println!();
 
     // ── Confirm ───────────────────────────────────────────────────────────────
@@ -102,6 +110,15 @@ pub fn run(config: &Config, force: bool) -> Result<()> {
                 ),
             }
         }
+    }
+
+    // ── Strip the Windows user PATH registry entries setup added ─────────────
+    #[cfg(target_os = "windows")]
+    if let Err(e) = crate::commands::setup::strip_windows_registry() {
+        eprintln!(
+            "  {} Could not clean the user PATH registry: {e}",
+            "!".yellow()
+        );
     }
 
     // ── Remove the binary (last, so earlier errors still have gvsn available) ──

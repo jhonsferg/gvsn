@@ -316,8 +316,11 @@ fn inject_windows_registry() -> Result<()> {
 }
 
 /// Removes all gvsn-managed entries from the Windows user PATH in the registry.
+///
+/// `pub(crate)` so `commands::implode` can reuse it - `implode` must undo
+/// everything `setup`'s `--reset` path undoes, including this.
 #[cfg(target_os = "windows")]
-fn strip_windows_registry() -> Result<()> {
+pub(crate) fn strip_windows_registry() -> Result<()> {
     use anyhow::Context;
     use winreg::enums::{HKEY_CURRENT_USER, KEY_READ, KEY_WRITE};
     use winreg::RegKey;
