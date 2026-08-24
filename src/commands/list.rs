@@ -1,4 +1,4 @@
-//! `gvm list` - show all locally installed Go versions.
+//! `gvsn list` - show all locally installed Go versions.
 //!
 //! Installed versions are listed newest-first. The currently active version
 //! is marked so the user can identify it at a glance.
@@ -48,7 +48,7 @@ pub fn run(config: &Config, json: bool) -> Result<()> {
     }
 
     if installed.is_empty() {
-        println!("No Go versions installed. Run 'gvm install latest'.");
+        println!("No Go versions installed. Run 'gvsn install latest'.");
         return Ok(());
     }
 

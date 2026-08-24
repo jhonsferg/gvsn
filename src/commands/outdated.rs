@@ -1,4 +1,4 @@
-//! `gvm outdated` - check which installed Go versions have newer patch releases.
+//! `gvsn outdated` - check which installed Go versions have newer patch releases.
 //!
 //! Compares every locally installed version against the latest available patch
 //! for that same major.minor line on go.dev and reports the status so the user
@@ -54,7 +54,7 @@ pub fn run(config: &Config, client: &HttpClient, json: bool) -> Result<()> {
         if json {
             println!("[]");
         } else {
-            println!("No Go versions installed. Run 'gvm install latest'.");
+            println!("No Go versions installed. Run 'gvsn install latest'.");
         }
         return Ok(());
     }
@@ -143,8 +143,8 @@ pub fn run(config: &Config, client: &HttpClient, json: bool) -> Result<()> {
     if any_outdated {
         println!(
             "  Run {} to update a version, or {} to remove it.",
-            "gvm install <version>".cyan(),
-            "gvm uninstall <version>".cyan()
+            "gvsn install <version>".cyan(),
+            "gvsn uninstall <version>".cyan()
         );
     } else {
         println!("  {} All installed versions are up to date.", "✓".green());
@@ -224,7 +224,7 @@ mod tests {
     }
 
     #[test]
-    fn run_creates_gvm_root_before_fetching_when_a_version_is_installed() {
+    fn run_creates_gvsn_root_before_fetching_when_a_version_is_installed() {
         // config.root does not exist yet (only the tempdir it lives under
         // does) - regression test for the fix that ensures `ensure_dirs()`
         // runs before `fetch_releases` tries to write the release-index

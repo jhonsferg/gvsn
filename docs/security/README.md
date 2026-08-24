@@ -1,5 +1,9 @@
 # Security Documentation
 
+> ℹ️ This project was renamed from `gvm-rs` to `gvsn` in August 2026. The guides and reports below
+> predate the rename and correctly refer to the project under its former name throughout - this
+> preserves the historical record as it was originally documented and verified.
+
 This section documents real security incidents affecting this project, written for a general
 audience: users, maintainers of other projects, and security researchers. The goal is that anyone
 can understand **what the attacker did, how the malware behaves, and how to recognize the same

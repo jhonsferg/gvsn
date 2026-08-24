@@ -1,11 +1,11 @@
-//! `gvm path` - print the `bin/` directory of a Go version.
+//! `gvsn path` - print the `bin/` directory of a Go version.
 //!
 //! The output is a plain, undecorated path designed to be captured by shell
 //! hooks and scripts:
 //!
 //! ```sh
-//! export PATH="$(gvm path):$PATH"
-//! export GOROOT="$(dirname "$(gvm path)")"
+//! export PATH="$(gvsn path):$PATH"
+//! export GOROOT="$(dirname "$(gvsn path)")"
 //! ```
 
 use anyhow::Result;

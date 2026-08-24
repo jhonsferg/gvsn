@@ -1,26 +1,26 @@
-//! `gvm shell` - activate a Go version for the current session only.
+//! `gvsn shell` - activate a Go version for the current session only.
 //!
-//! Unlike `gvm use`, this command does **not** write to `~/.gvm/version` or
+//! Unlike `gvsn use`, this command does **not** write to `~/.gvsn/version` or
 //! create a `.go-version` file. Instead it outputs a shell script (to stdout)
 //! that the shell wrapper function immediately evaluates, setting
-//! `GVM_SHELL_VERSION`, `GOROOT`, and `PATH` only for the lifetime of the
+//! `GVSN_SHELL_VERSION`, `GOROOT`, and `PATH` only for the lifetime of the
 //! current terminal session.
 //!
-//! When `--unset` is passed the script clears `GVM_SHELL_VERSION` and triggers
-//! `_gvm_hook` so the version reverts immediately to whatever `.go-version` or
+//! When `--unset` is passed the script clears `GVSN_SHELL_VERSION` and triggers
+//! `_gvsn_hook` so the version reverts immediately to whatever `.go-version` or
 //! the global default says.
 //!
 //! # Usage
 //!
 //! ```text
-//! gvm shell 1.23        # activate for this session
-//! gvm shell --unset     # revert to file-based version
+//! gvsn shell 1.23        # activate for this session
+//! gvsn shell --unset     # revert to file-based version
 //! ```
 //!
 //! The output of this command is meant to be eval'd by the shell wrapper
-//! function that `gvm setup` injects into the user's profile. Running the
+//! function that `gvsn setup` injects into the user's profile. Running the
 //! command directly in a terminal will print the raw shell script - use
-//! `gvm env` for that use-case instead.
+//! `gvsn env` for that use-case instead.
 
 use anyhow::{bail, Result};
 use colored::Colorize;
@@ -51,7 +51,7 @@ pub fn run(
     }
     if !unset && version_str.is_none() {
         bail!(
-            "Specify a version to activate (e.g. `gvm shell 1.23`) \
+            "Specify a version to activate (e.g. `gvsn shell 1.23`) \
              or use --unset to revert."
         );
     }
@@ -78,8 +78,8 @@ pub fn run(
          Run {} to revert.",
         "→".cyan(),
         version.tag().bold(),
-        "GVM_SHELL_VERSION".dimmed(),
-        "gvm shell --unset".cyan()
+        "GVSN_SHELL_VERSION".dimmed(),
+        "gvsn shell --unset".cyan()
     );
 
     print!("{}", sh.shell_version_script(&version.tag(), &bin, &root));
@@ -94,15 +94,15 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn bash_shell_version_script_sets_gvm_shell_version() {
+    fn bash_shell_version_script_sets_gvsn_shell_version() {
         let script = Bash.shell_version_script(
             "go1.23.4",
-            Path::new("/home/user/.gvm/versions/go1.23.4/bin"),
-            Path::new("/home/user/.gvm/versions/go1.23.4"),
+            Path::new("/home/user/.gvsn/versions/go1.23.4/bin"),
+            Path::new("/home/user/.gvsn/versions/go1.23.4"),
         );
         assert!(
-            script.contains("GVM_SHELL_VERSION"),
-            "Must set GVM_SHELL_VERSION"
+            script.contains("GVSN_SHELL_VERSION"),
+            "Must set GVSN_SHELL_VERSION"
         );
         assert!(script.contains("go1.23.4"), "Must include the version tag");
         assert!(script.contains("GOROOT"), "Must set GOROOT");
@@ -111,11 +111,11 @@ mod tests {
 
     #[test]
     fn bash_shell_version_script_includes_bin_path() {
-        let bin = Path::new("/home/user/.gvm/versions/go1.23.4/bin");
+        let bin = Path::new("/home/user/.gvsn/versions/go1.23.4/bin");
         let script = Bash.shell_version_script(
             "go1.23.4",
             bin,
-            Path::new("/home/user/.gvm/versions/go1.23.4"),
+            Path::new("/home/user/.gvsn/versions/go1.23.4"),
         );
         assert!(
             script.contains(bin.to_str().unwrap()),
@@ -124,11 +124,11 @@ mod tests {
     }
 
     #[test]
-    fn bash_shell_unset_script_clears_gvm_shell_version() {
+    fn bash_shell_unset_script_clears_gvsn_shell_version() {
         let script = Bash.shell_unset_script();
         assert!(
-            script.contains("GVM_SHELL_VERSION"),
-            "Must reference GVM_SHELL_VERSION for clearing"
+            script.contains("GVSN_SHELL_VERSION"),
+            "Must reference GVSN_SHELL_VERSION for clearing"
         );
     }
 
@@ -136,8 +136,8 @@ mod tests {
     fn bash_shell_unset_script_triggers_hook() {
         let script = Bash.shell_unset_script();
         assert!(
-            script.contains("_gvm_hook"),
-            "Must call _gvm_hook to restore env"
+            script.contains("_gvsn_hook"),
+            "Must call _gvsn_hook to restore env"
         );
     }
 
@@ -145,10 +145,10 @@ mod tests {
     fn powershell_shell_version_script_sets_env_var() {
         let script = PowerShell.shell_version_script(
             "go1.23.4",
-            Path::new(r"C:\Users\user\.gvm\versions\go1.23.4\bin"),
-            Path::new(r"C:\Users\user\.gvm\versions\go1.23.4"),
+            Path::new(r"C:\Users\user\.gvsn\versions\go1.23.4\bin"),
+            Path::new(r"C:\Users\user\.gvsn\versions\go1.23.4"),
         );
-        assert!(script.contains("GVM_SHELL_VERSION"));
+        assert!(script.contains("GVSN_SHELL_VERSION"));
         assert!(script.contains("go1.23.4"));
         assert!(script.contains("GOROOT"));
     }
@@ -156,15 +156,15 @@ mod tests {
     #[test]
     fn powershell_shell_unset_script_clears_env_var() {
         let script = PowerShell.shell_unset_script();
-        assert!(script.contains("GVM_SHELL_VERSION"));
-        assert!(script.contains("_gvm_hook"));
+        assert!(script.contains("GVSN_SHELL_VERSION"));
+        assert!(script.contains("_gvsn_hook"));
     }
 
     #[test]
     fn shell_version_script_not_empty_for_all_shells() {
         use crate::shell::{Fish, Zsh};
-        let bin = Path::new("/home/user/.gvm/versions/go1.23.4/bin");
-        let root = Path::new("/home/user/.gvm/versions/go1.23.4");
+        let bin = Path::new("/home/user/.gvsn/versions/go1.23.4/bin");
+        let root = Path::new("/home/user/.gvsn/versions/go1.23.4");
         assert!(!Bash.shell_version_script("go1.23.4", bin, root).is_empty());
         assert!(!Zsh.shell_version_script("go1.23.4", bin, root).is_empty());
         assert!(!Fish.shell_version_script("go1.23.4", bin, root).is_empty());

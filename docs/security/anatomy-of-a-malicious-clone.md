@@ -1,5 +1,9 @@
 # Anatomy of a Malicious Repository Clone
 
+> ℹ️ This project was renamed from `gvm-rs` to `gvsn` in August 2026. This case study predates the
+> rename and correctly refers to the project under its former name throughout - the actionable
+> guidance in [§10](#10-how-to-protect-yourself) has been updated to point at the current project.
+
 **A real case study: how an attacker cloned `gvm-rs`, hid a Lua-based infostealer behind fake
 commits, and tried to trick users into running it - and how we caught and fully documented it.**
 
@@ -365,8 +369,9 @@ Full methodology: [`lua-trojan-defensive-analysis.md`](lua-trojan-defensive-anal
 
 ## 10. How to protect yourself
 
-- **Only download `gvm` from the official sources**: the
-  [GitHub Releases](https://github.com/jhonsferg/gvm-rs/releases) page or the install commands in
+- **Only download `gvsn` (this project's current name; it was `gvm-rs` at the time of this
+  incident) from the official sources**: the
+  [GitHub Releases](https://github.com/jhonsferg/gvsn/releases) page or the install commands in
   the [README](../../README.md#-installation). Real releases always have a `checksums.txt` and a
   VirusTotal scan.
 - **Be suspicious of any "download" that points at a file committed into a source tree** (`src/`,

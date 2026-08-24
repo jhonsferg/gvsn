@@ -1,7 +1,7 @@
-//! `gvm use` - set the global default Go version.
+//! `gvsn use` - set the global default Go version.
 //!
 //! Resolves the supplied spec against the local toolchain store, writes the
-//! version tag to `~/.gvm/version`, and prints the shell-appropriate command
+//! version tag to `~/.gvsn/version`, and prints the shell-appropriate command
 //! the user should run to activate the change in their current session.
 
 use anyhow::Result;
@@ -32,21 +32,21 @@ pub fn run(config: &Config, spec_str: &str) -> Result<()> {
     );
     println!(
         "  Active in all shells (CMD, Git Bash, PowerShell) and editors via {}.",
-        "~/.gvm/current".cyan()
+        "~/.gvsn/current".cyan()
     );
 
-    // When the gvm wrapper function is active (injected by `gvm setup`) the
+    // When the gvsn wrapper function is active (injected by `gvsn setup`) the
     // current shell session is already updated automatically. Print a fallback
     // hint for sessions where the wrapper is not loaded (scripts, CI, raw shell).
     let hint = match shell::detect() {
         Some(sh) if sh.name() == "powershell" => {
             format!(
-                "gvm env --shell powershell | Out-String | {}",
+                "gvsn env --shell powershell | Out-String | {}",
                 "Invoke-Expression".cyan()
             )
         }
-        Some(sh) => format!("eval \"$(gvm env --shell {})\"", sh.name().cyan()),
-        None => "eval \"$(gvm env)\"".to_string(),
+        Some(sh) => format!("eval \"$(gvsn env --shell {})\"", sh.name().cyan()),
+        None => "eval \"$(gvsn env)\"".to_string(),
     };
     println!("  (current session without wrapper: {hint})");
     Ok(())

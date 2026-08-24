@@ -3,11 +3,10 @@
 # this repository, as opposed to an unrelated project that merely shares part of
 # its name.
 #
-# "gvm" is not unique to this project - it also stands for Greenbone
-# Vulnerability Management, GNOME Virtual Machine, gVisor VM, etc. A plain
-# name search (see clone-watch.sh Strategy 1) reliably surfaces unrelated
-# repos from those namespaces too, so name-matching alone is not enough
-# signal to file an issue over - this script adds a content-based check.
+# A plain name search (see clone-watch.sh Strategy 1) can still surface
+# unrelated repos that merely share part of the name, so name-matching alone
+# is not enough signal to file an issue over - this script adds a
+# content-based check.
 #
 # Must be run from a checkout of this repository - it reads the local
 # Cargo.toml/README.md/src/shell/mod.rs as the canonical fingerprints and
@@ -19,7 +18,7 @@
 # Signals and their weight:
 #   source-fingerprint (70) - candidate's src/shell/mod.rs contains both of
 #                             this project's distinctive internal markers
-#                             ("# gvm init", "_gvm_hook"). This is the load-
+#                             ("# gvsn init", "_gvsn_hook"). This is the load-
 #                             bearing signal: those two literal strings
 #                             together, at that exact path, are not something
 #                             an unrelated project would produce by chance -
@@ -31,13 +30,11 @@
 #                             "Usage" section headers overlap between any two
 #                             CLI tool READMEs, so a low bar produces noise.
 #   cargo-package-name  (10) - candidate's Cargo.toml declares the exact
-#                             package name "gvm" or "gvm-rs". Kept as a weak,
+#                             package name "gvsn". Kept as a weak,
 #                             corroborating-only signal - deliberately NOT
-#                             enough by itself to move the needle, since
-#                             "gvm-rs"/"gvm" as a crate name is a namespace
-#                             collision that happens for unrelated projects
-#                             (e.g. Greenbone Vulnerability Management
-#                             bindings) about as often as for actual clones.
+#                             enough by itself to move the needle, since a
+#                             matching crate name alone doesn't prove the
+#                             source was actually copied.
 #
 # Earlier revision of this script also scored raw Cargo.toml dependency-name
 # overlap (e.g. "both use serde and anyhow and clap"). Dropped: verified
@@ -69,7 +66,7 @@ signals=()
 
 # --- Signal: distinctive source fingerprint (dominant) ---
 their_shell="$(fetch_file "src/shell/mod.rs")"
-if [ -n "$their_shell" ] && echo "$their_shell" | grep -q '# gvm init' && echo "$their_shell" | grep -q '_gvm_hook'; then
+if [ -n "$their_shell" ] && echo "$their_shell" | grep -q '# gvsn init' && echo "$their_shell" | grep -q '_gvsn_hook'; then
   score=$((score + 70))
   signals+=("source-fingerprint:src/shell/mod.rs")
 fi
@@ -90,7 +87,7 @@ fi
 
 # --- Signal: Cargo.toml package identity (weak, corroborating only) ---
 their_cargo="$(fetch_file "Cargo.toml")"
-if [ -n "$their_cargo" ] && echo "$their_cargo" | grep -qE '^[[:space:]]*name[[:space:]]*=[[:space:]]*"gvm(-rs)?"[[:space:]]*$'; then
+if [ -n "$their_cargo" ] && echo "$their_cargo" | grep -qE '^[[:space:]]*name[[:space:]]*=[[:space:]]*"gvsn"[[:space:]]*$'; then
   score=$((score + 10))
   signals+=("cargo-package-name")
 fi

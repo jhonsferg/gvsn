@@ -1,4 +1,4 @@
-//! `gvm install` - download and install a Go version.
+//! `gvsn install` - download and install a Go version.
 //!
 //! The install process follows these steps:
 //!
@@ -78,7 +78,7 @@ pub fn run(config: &Config, client: &HttpClient, spec_str: &str, force: bool) ->
 
     // Everything below writes into the shared tmp/ download path and the
     // versions store, so it runs under a single lock: two concurrent
-    // `gvm install`/`gvm build` invocations must not race on the same
+    // `gvsn install`/`gvsn build` invocations must not race on the same
     // download destination or interleave their directory mutations.
     let lock_path = config.root.join(".lock");
     let archive_path = lock::with_lock(&lock_path, || {
@@ -112,7 +112,7 @@ pub fn run(config: &Config, client: &HttpClient, spec_str: &str, force: bool) ->
     );
     println!(
         "  Run {} to activate.",
-        format!("gvm use {}", version).cyan()
+        format!("gvsn use {}", version).cyan()
     );
 
     // Install user-defined default packages (e.g. gopls, dlv) if configured.

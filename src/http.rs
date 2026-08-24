@@ -1,6 +1,6 @@
 //! Shared HTTP client, verbose-logging helpers, and download options.
 //!
-//! All outbound HTTP requests in `gvm` go through [`HttpClient`].
+//! All outbound HTTP requests in `gvsn` go through [`HttpClient`].
 //! Using a single client ensures consistent timeout and header settings
 //! across the go.dev API, the GitHub Releases API, and binary downloads.
 //!
@@ -35,7 +35,7 @@ impl HttpClient {
             // slow (but still progressing) transfer just continues across a
             // couple of attempts instead of failing outright.
             .timeout_global(Some(Duration::from_secs(300)))
-            .user_agent(format!("gvm/{}", env!("CARGO_PKG_VERSION")))
+            .user_agent(format!("gvsn/{}", env!("CARGO_PKG_VERSION")))
             .build()
             .new_agent();
         Ok(Self {

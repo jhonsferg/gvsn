@@ -1,16 +1,16 @@
 //! Command-line interface definition.
 //!
 //! This module declares the top-level [`Cli`] struct and the [`Command`] enum
-//! that together form the complete CLI surface of `gvm`. Every subcommand,
+//! that together form the complete CLI surface of `gvsn`. Every subcommand,
 //! flag, and argument is defined here using [`clap`]'s derive macros.
-//! The doc-comment on each variant becomes the help text shown by `gvm --help`.
+//! The doc-comment on each variant becomes the help text shown by `gvsn --help`.
 
 use clap::{Args, Parser, Subcommand};
 
 /// Download tuning flags shared by commands that fetch files from the network.
 ///
 /// Embed with `#[command(flatten)]` on any subcommand that downloads Go
-/// archives, source tarballs, or the gvm binary itself.
+/// archives, source tarballs, or the gvsn binary itself.
 #[derive(Args, Clone, Debug)]
 pub struct DownloadArgs {
     /// Maximum retry attempts on network failure (default: 3).
@@ -24,7 +24,7 @@ pub struct DownloadArgs {
 /// Top-level CLI structure parsed from `argv`.
 #[derive(Parser)]
 #[command(
-    name    = "gvm",
+    name    = "gvsn",
     version = env!("CARGO_PKG_VERSION"),
     about   = "A fast, cross-platform Go version manager",
 )]
@@ -38,13 +38,13 @@ pub struct Cli {
     /// server responses. Output is written to stderr so it does not interfere
     /// with commands that emit machine-readable text to stdout.
     ///
-    /// On `gvm build` this flag additionally streams the Go compiler's
+    /// On `gvsn build` this flag additionally streams the Go compiler's
     /// output live instead of showing a progress message.
     #[arg(long, short = 'v', global = true)]
     pub verbose: bool,
 }
 
-/// All subcommands exposed by `gvm`.
+/// All subcommands exposed by `gvsn`.
 #[derive(Subcommand)]
 pub enum Command {
     /// Compile a Go version from source and install it.
@@ -53,15 +53,15 @@ pub enum Command {
     /// bootstrap compiler (or downloads one temporarily), then runs the
     /// platform build script (`src/make.bash` on Unix, `src/make.bat` on
     /// Windows) to produce a fully functional toolchain installed into
-    /// `~/.gvm/versions/go<X>.<Y>.<Z>/`.
+    /// `~/.gvsn/versions/go<X>.<Y>.<Z>/`.
     ///
     /// # Examples
     ///
     /// ```text
-    /// gvm build 1.25.0
-    /// gvm build 1.25.0 --no-cgo
-    /// gvm build 1.25.0 --bootstrap 1.22.6
-    /// gvm build 1.25.0 --env GOAMD64=v3 --env CC=clang
+    /// gvsn build 1.25.0
+    /// gvsn build 1.25.0 --no-cgo
+    /// gvsn build 1.25.0 --bootstrap 1.22.6
+    /// gvsn build 1.25.0 --env GOAMD64=v3 --env CC=clang
     /// ```
     ///
     /// **Note**: building from source takes 5-15 minutes and requires ~3 GB of
@@ -82,7 +82,7 @@ pub enum Command {
 
         /// Bootstrap Go version to use as the host compiler.
         ///
-        /// Must be installed via `gvm install`. Defaults to the highest
+        /// Must be installed via `gvsn install`. Defaults to the highest
         /// installed version; downloads a temporary bootstrap if none exists.
         #[arg(long, value_name = "VERSION")]
         bootstrap: Option<String>,
@@ -97,7 +97,7 @@ pub enum Command {
         download: DownloadArgs,
     },
 
-    /// Install a Go version (e.g. `gvm install 1.22.4` or `gvm install latest`).
+    /// Install a Go version (e.g. `gvsn install 1.22.4` or `gvsn install latest`).
     Install {
         /// Version spec to install: an exact version (`1.22.4`), a minor range
         /// (`1.22`), or the keyword `latest`.
@@ -113,7 +113,7 @@ pub enum Command {
 
     /// Set the global default Go version.
     ///
-    /// The version must already be installed. Use `gvm install <version>` first.
+    /// The version must already be installed. Use `gvsn install <version>` first.
     Use {
         /// Version spec to activate globally.
         version: String,
@@ -176,7 +176,7 @@ pub enum Command {
     /// Print the `bin/` directory path for the active (or specified) Go version.
     ///
     /// Output is a plain path suitable for shell capture, e.g.
-    /// `export PATH="$(gvm path):$PATH"`.
+    /// `export PATH="$(gvsn path):$PATH"`.
     Path {
         /// Optional version spec. Defaults to the currently active version.
         version: Option<String>,
@@ -187,9 +187,9 @@ pub enum Command {
     /// Pipe the output to your shell's eval mechanism so the active Go version
     /// is applied to the current session:
     ///
-    /// - Bash / Zsh: `eval "$(gvm env --shell bash)"`
-    /// - Fish: `gvm env --shell fish | source`
-    /// - PowerShell: `gvm env --shell powershell | Out-String | Invoke-Expression`
+    /// - Bash / Zsh: `eval "$(gvsn env --shell bash)"`
+    /// - Fish: `gvsn env --shell fish | source`
+    /// - PowerShell: `gvsn env --shell powershell | Out-String | Invoke-Expression`
     Env {
         /// Target shell. Auto-detected when omitted.
         /// Accepted values: `powershell`, `bash`, `zsh`, `fish`.
@@ -197,17 +197,17 @@ pub enum Command {
         shell: Option<String>,
     },
 
-    /// Configure the shell environment for gvm.
+    /// Configure the shell environment for gvsn.
     ///
-    /// Injects the `gvm env` hook into the shell profile, adds a static PATH
+    /// Injects the `gvsn env` hook into the shell profile, adds a static PATH
     /// entry to the login profile (Linux/macOS) or the Windows registry so that
     /// `go` is visible to all applications including GUI editors like VSCode.
     ///
     /// Re-running is safe: existing up-to-date blocks are left unchanged and
     /// stale ones are updated automatically.
     ///
-    /// Pass `--reset` to strip all previous gvm configuration and re-apply it
-    /// cleanly. This is safe: only gvm-managed blocks (marked with `# gvm ...`)
+    /// Pass `--reset` to strip all previous gvsn configuration and re-apply it
+    /// cleanly. This is safe: only gvsn-managed blocks (marked with `# gvsn ...`)
     /// are touched; all other content in profile files is preserved.
     Setup {
         /// Target shell. Auto-detected when omitted.
@@ -215,7 +215,7 @@ pub enum Command {
         #[arg(long)]
         shell: Option<String>,
 
-        /// Remove all previous gvm configuration and re-apply it cleanly.
+        /// Remove all previous gvsn configuration and re-apply it cleanly.
         #[arg(long)]
         reset: bool,
     },
@@ -228,7 +228,7 @@ pub enum Command {
     /// # Example
     ///
     /// ```text
-    /// gvm exec 1.21 go test ./...
+    /// gvsn exec 1.21 go test ./...
     /// ```
     Exec {
         /// Version spec to use for this invocation.
@@ -239,7 +239,7 @@ pub enum Command {
         args: Vec<String>,
     },
 
-    /// Diagnose the gvm environment and report configuration issues.
+    /// Diagnose the gvsn environment and report configuration issues.
     ///
     /// Exits with status code `1` if any issue is found, making it suitable
     /// for use in CI health checks.
@@ -249,7 +249,7 @@ pub enum Command {
         shell: Option<String>,
 
         /// Automatically repair fixable issues (missing/stale shell hook,
-        /// missing `~/.gvm/current` link) instead of only reporting them.
+        /// missing `~/.gvsn/current` link) instead of only reporting them.
         #[arg(long)]
         fix: bool,
     },
@@ -276,7 +276,7 @@ pub enum Command {
     /// Remove installed Go versions that are no longer referenced.
     ///
     /// A version is considered referenced when it matches the global default
-    /// (`~/.gvm/version`), appears in a `.go-version` file found by walking up
+    /// (`~/.gvsn/version`), appears in a `.go-version` file found by walking up
     /// from the current directory, or appears in a `.go-version` file inside
     /// `--scan-dir`. Everything else is offered for removal.
     Prune {
@@ -297,21 +297,21 @@ pub enum Command {
 
     /// Activate a Go version for the current shell session only.
     ///
-    /// Unlike `gvm use`, this command does not write any files. The activation
+    /// Unlike `gvsn use`, this command does not write any files. The activation
     /// lasts only for the current terminal session (or until `--unset` is run).
-    /// The `_gvm_hook` respects this override and skips automatic switching
-    /// while `GVM_SHELL_VERSION` is set.
+    /// The `_gvsn_hook` respects this override and skips automatic switching
+    /// while `GVSN_SHELL_VERSION` is set.
     ///
     /// # Examples
     ///
     /// ```text
-    /// gvm shell 1.21       # activate 1.21 for this session
-    /// gvm shell --unset    # revert to .go-version / global default
+    /// gvsn shell 1.21       # activate 1.21 for this session
+    /// gvsn shell --unset    # revert to .go-version / global default
     /// ```
     ///
-    /// **Note**: the shell wrapper injected by `gvm setup` must be active for
+    /// **Note**: the shell wrapper injected by `gvsn setup` must be active for
     /// this command to take effect immediately. Without it you must manually
-    /// run `eval "$(gvm shell 1.21)"`.
+    /// run `eval "$(gvsn shell 1.21)"`.
     Shell {
         /// Version spec to activate for this session only.
         version: Option<String>,
@@ -325,13 +325,13 @@ pub enum Command {
         shell: Option<String>,
     },
 
-    /// Update gvm itself to the latest release from GitHub.
+    /// Update gvsn itself to the latest release from GitHub.
     ///
     /// Downloads the correct binary for the current platform from
-    /// `github.com/jhonsferg/gvm-rs` and replaces the running executable
+    /// `github.com/jhonsferg/gvsn` and replaces the running executable
     /// in-place. The operation is atomic on Unix and best-effort on Windows.
     Upgrade {
-        /// Re-install the latest version even if gvm is already up to date.
+        /// Re-install the latest version even if gvsn is already up to date.
         #[arg(long, short = 'f')]
         force: bool,
 
@@ -339,10 +339,10 @@ pub enum Command {
         download: DownloadArgs,
     },
 
-    /// Completely remove gvm and all installed Go versions from the system.
+    /// Completely remove gvsn and all installed Go versions from the system.
     ///
-    /// Deletes the gvm data directory (`~/.gvm`), the `gvm` binary, and every
-    /// gvm-managed line from the detected shell's profile. A confirmation
+    /// Deletes the gvsn data directory (`~/.gvsn`), the `gvsn` binary, and every
+    /// gvsn-managed line from the detected shell's profile. A confirmation
     /// prompt is shown unless `--force` is passed.
     Implode {
         /// Skip the confirmation prompt and remove everything immediately.

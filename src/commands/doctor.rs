@@ -1,4 +1,4 @@
-//! `gvm doctor` - diagnose the gvm environment.
+//! `gvsn doctor` - diagnose the gvsn environment.
 //!
 //! Runs a series of checks and reports the result of each one. Exits with
 //! status code `1` if any check fails, making the command suitable for CI
@@ -6,14 +6,14 @@
 //!
 //! # Checks performed
 //!
-//! 1. The `gvm` binary directory is on `PATH`.
+//! 1. The `gvsn` binary directory is on `PATH`.
 //! 2. A global Go version has been set.
 //! 3. The global version is installed on disk.
 //! 4. `GOROOT` resolves to the correct directory.
 //! 5. The current directory's `.go-version` or `.tool-versions` (if present)
 //!    refers to an installed version.
-//! 6. The `gvm env` hook is present in the detected shell's profile.
-//! 7. Only one `go` binary is active in `PATH` and it is gvm-managed.
+//! 6. The `gvsn env` hook is present in the detected shell's profile.
+//! 7. Only one `go` binary is active in `PATH` and it is gvsn-managed.
 
 use anyhow::Result;
 use colored::Colorize;
@@ -29,12 +29,12 @@ use crate::{commands::setup, config::Config, shell, toolchain, version::GoVersio
 /// When `fix` is `true`, two classes of issue are repaired automatically
 /// after the checks run:
 /// - A missing/stale shell hook or missing PATH entry (checks 1 and 7) is
-///   fixed by running the same logic as `gvm setup`.
-/// - A missing `~/.gvm/current` junction (check 5) is recreated by
+///   fixed by running the same logic as `gvsn setup`.
+/// - A missing `~/.gvsn/current` junction (check 5) is recreated by
 ///   re-pointing it at the installed global version, if one is set.
 ///
 /// Everything else (an uninstalled global version, a `.go-version` pointing
-/// at an uninstalled version, a shadowed non-gvm `go` on `PATH`) requires a
+/// at an uninstalled version, a shadowed non-gvsn `go` on `PATH`) requires a
 /// choice only the user can make (which version, whether to uninstall
 /// something) and is never auto-fixed.
 ///
@@ -44,20 +44,20 @@ use crate::{commands::setup, config::Config, shell, toolchain, version::GoVersio
 /// failures are reported to stdout and tracked in the `issues` counter rather
 /// than being propagated as errors.
 pub fn run(config: &Config, shell_str: Option<&str>, fix: bool) -> Result<()> {
-    println!("Checking gvm environment...\n");
+    println!("Checking gvsn environment...\n");
     let mut issues = 0u32;
     let go_name = if cfg!(windows) { "go.exe" } else { "go" };
 
-    // ---- Check 1: gvm binary on PATH ----------------------------------------
+    // ---- Check 1: gvsn binary on PATH ----------------------------------------
     let mut path_issue = false;
-    if shell::gvm_in_path() {
-        ok("gvm binary is in PATH");
+    if shell::gvsn_in_path() {
+        ok("gvsn binary is in PATH");
     } else {
         let dir = std::env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(|d| d.display().to_string()))
             .unwrap_or_else(|| "<unknown>".to_string());
-        fail(&format!("gvm is NOT in PATH  (add '{dir}' to your PATH)"));
+        fail(&format!("gvsn is NOT in PATH  (add '{dir}' to your PATH)"));
         issues += 1;
         path_issue = true;
     }
@@ -66,7 +66,7 @@ pub fn run(config: &Config, shell_str: Option<&str>, fix: bool) -> Result<()> {
     let mut installed_global: Option<GoVersion> = None;
     match toolchain::global_version(config) {
         Err(_) => {
-            fail("No global Go version set  (run 'gvm use <version>')");
+            fail("No global Go version set  (run 'gvsn use <version>')");
             issues += 1;
         }
         Ok(v) => {
@@ -81,7 +81,7 @@ pub fn run(config: &Config, shell_str: Option<&str>, fix: bool) -> Result<()> {
                 installed_global = Some(v);
             } else {
                 fail(&format!(
-                    "{} is NOT installed  (run 'gvm install {}')",
+                    "{} is NOT installed  (run 'gvsn install {}')",
                     v.tag(),
                     v.tag()
                 ));
@@ -90,21 +90,21 @@ pub fn run(config: &Config, shell_str: Option<&str>, fix: bool) -> Result<()> {
         }
     }
 
-    // ---- Check 5: ~/.gvm/current junction is set up -------------------------
+    // ---- Check 5: ~/.gvsn/current junction is set up -------------------------
     //
-    // Users who installed gvm before v1.1.0 (which introduced the junction)
-    // will not have ~/.gvm/current until they run `gvm use` with the new
+    // Users who installed gvsn before v1.1.0 (which introduced the junction)
+    // will not have ~/.gvsn/current until they run `gvsn use` with the new
     // binary. Warn them so `go` works in CMD, Git Bash and editors.
     let current_dir = config.current_dir();
     let current_go = current_dir.join("bin").join(go_name);
     let current_link_missing = !current_go.exists();
     if !current_link_missing {
         ok(&format!(
-            "~/.gvm/current junction is configured ({})",
+            "~/.gvsn/current junction is configured ({})",
             current_dir.display()
         ));
     } else {
-        fail("~/.gvm/current not set up  (run 'gvm use <version>' to enable universal shell support)");
+        fail("~/.gvsn/current not set up  (run 'gvsn use <version>' to enable universal shell support)");
         issues += 1;
     }
 
@@ -117,7 +117,7 @@ pub fn run(config: &Config, shell_str: Option<&str>, fix: bool) -> Result<()> {
                 }
                 Ok(v) => {
                     warn(&format!(
-                        "{source} = {} but NOT installed  (run 'gvm install {}')",
+                        "{source} = {} but NOT installed  (run 'gvsn install {}')",
                         v.tag(),
                         v.tag()
                     ));
@@ -131,7 +131,7 @@ pub fn run(config: &Config, shell_str: Option<&str>, fix: bool) -> Result<()> {
         }
     }
 
-    // ---- Check 7: shell profile contains the gvm init hook ------------------
+    // ---- Check 7: shell profile contains the gvsn init hook ------------------
     let sh = match shell_str {
         Some(s) => shell::from_str(s).ok(),
         None => shell::detect(),
@@ -144,11 +144,11 @@ pub fn run(config: &Config, shell_str: Option<&str>, fix: bool) -> Result<()> {
             Some(profile) => {
                 if profile.exists() {
                     let content = std::fs::read_to_string(&profile).unwrap_or_default();
-                    if content.contains("# gvm init") {
+                    if content.contains("# gvsn init") {
                         ok(&format!("Shell profile configured ({})", profile.display()));
                     } else {
                         fail(&format!(
-                            "gvm init missing from {}  (run 'gvm setup')",
+                            "gvsn init missing from {}  (run 'gvsn setup')",
                             profile.display()
                         ));
                         issues += 1;
@@ -156,7 +156,7 @@ pub fn run(config: &Config, shell_str: Option<&str>, fix: bool) -> Result<()> {
                     }
                 } else {
                     fail(&format!(
-                        "Profile not found: {}  (run 'gvm setup')",
+                        "Profile not found: {}  (run 'gvsn setup')",
                         profile.display()
                     ));
                     issues += 1;
@@ -166,13 +166,13 @@ pub fn run(config: &Config, shell_str: Option<&str>, fix: bool) -> Result<()> {
         }
     }
 
-    // ---- Check 8: single, gvm-managed `go` binary in PATH ------------------
+    // ---- Check 8: single, gvsn-managed `go` binary in PATH ------------------
     //
     // Scans every directory in PATH for a `go` (or `go.exe`) executable.
     // Reports a warning when multiple are found (shadowing is confusing) and
-    // an error when the first - i.e. the active - one is not managed by gvm.
+    // an error when the first - i.e. the active - one is not managed by gvsn.
     // This is what `whereis go` surfaces on Linux: system-installed Go
-    // alongside the gvm-managed one.
+    // alongside the gvsn-managed one.
     let path_sep = if cfg!(windows) { ';' } else { ':' };
     let path_var = std::env::var("PATH").unwrap_or_default();
     let versions_dir = config.versions_dir();
@@ -184,53 +184,53 @@ pub fn run(config: &Config, shell_str: Option<&str>, fix: bool) -> Result<()> {
             // No Go in PATH at all - only relevant if a version is supposed to be active.
         }
         GoPathStatus::SingleManaged(go) => {
-            ok(&format!("Active Go is gvm-managed ({})", go.display()));
+            ok(&format!("Active Go is gvsn-managed ({})", go.display()));
         }
         GoPathStatus::SingleUnmanaged(go) => {
             fail(&format!(
-                "Active Go is NOT managed by gvm: {}",
+                "Active Go is NOT managed by gvsn: {}",
                 go.display()
             ));
             println!(
-                "    Hint: remove the system Go package or run 'gvm setup' \
-                      so gvm's PATH entry comes first."
+                "    Hint: remove the system Go package or run 'gvsn setup' \
+                      so gvsn's PATH entry comes first."
             );
             issues += 1;
         }
         GoPathStatus::MultipleAllManaged(active) => {
-            // All extra entries are other gvm-managed paths (e.g. both the versioned
-            // directory and the ~/.gvm/current junction appear in PATH). Harmless.
-            ok(&format!("Active Go is gvm-managed ({})", active.display()));
+            // All extra entries are other gvsn-managed paths (e.g. both the versioned
+            // directory and the ~/.gvsn/current junction appear in PATH). Harmless.
+            ok(&format!("Active Go is gvsn-managed ({})", active.display()));
         }
-        GoPathStatus::MultipleShadowedNonGvm { shadowed, .. } => {
+        GoPathStatus::MultipleShadowedNonGvsn { shadowed, .. } => {
             warn(&format!(
-                "{} Go binaries found in PATH - {} non-gvm installation(s) are shadowed \
+                "{} Go binaries found in PATH - {} non-gvsn installation(s) are shadowed \
                  (consider removing them to avoid confusion):",
                 shadowed.len() + 1,
                 shadowed.len()
             ));
             for path in &shadowed {
-                println!("    {} (non-gvm, shadowed)", path.display());
+                println!("    {} (non-gvsn, shadowed)", path.display());
             }
         }
         GoPathStatus::MultipleActiveNotManaged { all } => {
             fail(&format!(
-                "{} Go binaries in PATH - gvm's version is being shadowed:",
+                "{} Go binaries in PATH - gvsn's version is being shadowed:",
                 all.len()
             ));
             for (i, path) in all.iter().enumerate() {
                 let label = if i == 0 {
-                    " (active - NOT gvm-managed)"
+                    " (active - NOT gvsn-managed)"
                 } else if path.starts_with(&versions_dir) || path.starts_with(&current_dir) {
-                    " (gvm-managed - shadowed)"
+                    " (gvsn-managed - shadowed)"
                 } else {
                     " (shadowed)"
                 };
                 println!("    {}{label}", path.display());
             }
             println!(
-                "    Hint: remove the system Go package or run 'gvm setup' \
-                      to ensure gvm's PATH entry is first."
+                "    Hint: remove the system Go package or run 'gvsn setup' \
+                      to ensure gvsn's PATH entry is first."
             );
             issues += 1;
         }
@@ -253,7 +253,7 @@ pub fn run(config: &Config, shell_str: Option<&str>, fix: bool) -> Result<()> {
             match &sh {
                 Some(sh) => match setup::run(Some(sh.name()), false) {
                     Ok(()) => {
-                        println!("  {} Ran 'gvm setup' for {}.", "->".cyan(), sh.name());
+                        println!("  {} Ran 'gvsn setup' for {}.", "->".cyan(), sh.name());
                         if profile_issue {
                             println!("    Shell profile hook fixed.");
                             issues = issues.saturating_sub(1);
@@ -266,7 +266,7 @@ pub fn run(config: &Config, shell_str: Option<&str>, fix: bool) -> Result<()> {
                         fixed_any = true;
                     }
                     Err(e) => {
-                        println!("  {} Could not run 'gvm setup': {e:#}", "x".red());
+                        println!("  {} Could not run 'gvsn setup': {e:#}", "x".red());
                     }
                 },
                 None => {
@@ -283,17 +283,17 @@ pub fn run(config: &Config, shell_str: Option<&str>, fix: bool) -> Result<()> {
             match &installed_global {
                 Some(v) => match toolchain::set_active_version(config, v) {
                     Ok(()) => {
-                        println!("  {} Recreated ~/.gvm/current -> {}", "->".cyan(), v.tag());
+                        println!("  {} Recreated ~/.gvsn/current -> {}", "->".cyan(), v.tag());
                         issues = issues.saturating_sub(1);
                         fixed_any = true;
                     }
                     Err(e) => {
-                        println!("  {} Could not recreate ~/.gvm/current: {e:#}", "x".red());
+                        println!("  {} Could not recreate ~/.gvsn/current: {e:#}", "x".red());
                     }
                 },
                 None => {
                     println!(
-                        "  {} Cannot auto-fix ~/.gvm/current: no installed global version set.",
+                        "  {} Cannot auto-fix ~/.gvsn/current: no installed global version set.",
                         "!".yellow()
                     );
                 }
@@ -401,30 +401,30 @@ fn find_go_binaries(path_var: &str, path_sep: char, go_name: &str) -> Vec<std::p
 }
 
 /// Outcome of classifying the set of `go` binaries found on `PATH` against
-/// gvm's managed directories.
+/// gvsn's managed directories.
 #[derive(Debug, PartialEq, Eq)]
 enum GoPathStatus {
     /// No `go` binary found anywhere on `PATH`.
     None,
-    /// Exactly one `go` binary, and it is gvm-managed.
+    /// Exactly one `go` binary, and it is gvsn-managed.
     SingleManaged(std::path::PathBuf),
-    /// Exactly one `go` binary, and it is NOT gvm-managed.
+    /// Exactly one `go` binary, and it is NOT gvsn-managed.
     SingleUnmanaged(std::path::PathBuf),
-    /// Multiple `go` binaries, all gvm-managed (e.g. the versioned directory
+    /// Multiple `go` binaries, all gvsn-managed (e.g. the versioned directory
     /// and the `current` junction both appear on `PATH`). Harmless.
     MultipleAllManaged(std::path::PathBuf),
-    /// Multiple `go` binaries; the active (first) one is gvm-managed, but one
-    /// or more non-gvm installations are shadowed behind it.
-    MultipleShadowedNonGvm {
+    /// Multiple `go` binaries; the active (first) one is gvsn-managed, but one
+    /// or more non-gvsn installations are shadowed behind it.
+    MultipleShadowedNonGvsn {
         active: std::path::PathBuf,
         shadowed: Vec<std::path::PathBuf>,
     },
-    /// Multiple `go` binaries; the active (first) one is NOT gvm-managed, so
-    /// gvm's own installation is being shadowed.
+    /// Multiple `go` binaries; the active (first) one is NOT gvsn-managed, so
+    /// gvsn's own installation is being shadowed.
     MultipleActiveNotManaged { all: Vec<std::path::PathBuf> },
 }
 
-/// Classifies `go_paths` (in PATH order) against gvm's `versions_dir` and
+/// Classifies `go_paths` (in PATH order) against gvsn's `versions_dir` and
 /// `current_dir` to determine what, if anything, is wrong with the active Go
 /// binary resolution.
 fn classify_go_paths(
@@ -456,7 +456,7 @@ fn classify_go_paths(
                 if shadowed.is_empty() {
                     GoPathStatus::MultipleAllManaged(go_paths[0].clone())
                 } else {
-                    GoPathStatus::MultipleShadowedNonGvm {
+                    GoPathStatus::MultipleShadowedNonGvsn {
                         active: go_paths[0].clone(),
                         shadowed,
                     }
@@ -590,8 +590,8 @@ mod tests {
 
     #[test]
     fn classify_empty_is_none() {
-        let versions_dir = std::path::Path::new("/gvm/versions");
-        let current_dir = std::path::Path::new("/gvm/current");
+        let versions_dir = std::path::Path::new("/gvsn/versions");
+        let current_dir = std::path::Path::new("/gvsn/current");
         assert_eq!(
             classify_go_paths(&[], versions_dir, current_dir),
             GoPathStatus::None
@@ -600,8 +600,8 @@ mod tests {
 
     #[test]
     fn classify_single_managed_via_versions_dir() {
-        let versions_dir = std::path::Path::new("/gvm/versions");
-        let current_dir = std::path::Path::new("/gvm/current");
+        let versions_dir = std::path::Path::new("/gvsn/versions");
+        let current_dir = std::path::Path::new("/gvsn/current");
         let go = versions_dir.join("go1.22.4/bin/go");
         assert_eq!(
             classify_go_paths(std::slice::from_ref(&go), versions_dir, current_dir),
@@ -611,8 +611,8 @@ mod tests {
 
     #[test]
     fn classify_single_managed_via_current_dir() {
-        let versions_dir = std::path::Path::new("/gvm/versions");
-        let current_dir = std::path::Path::new("/gvm/current");
+        let versions_dir = std::path::Path::new("/gvsn/versions");
+        let current_dir = std::path::Path::new("/gvsn/current");
         let go = current_dir.join("bin/go");
         assert_eq!(
             classify_go_paths(std::slice::from_ref(&go), versions_dir, current_dir),
@@ -622,8 +622,8 @@ mod tests {
 
     #[test]
     fn classify_single_unmanaged() {
-        let versions_dir = std::path::Path::new("/gvm/versions");
-        let current_dir = std::path::Path::new("/gvm/current");
+        let versions_dir = std::path::Path::new("/gvsn/versions");
+        let current_dir = std::path::Path::new("/gvsn/current");
         let go = std::path::PathBuf::from("/usr/local/go/bin/go");
         assert_eq!(
             classify_go_paths(std::slice::from_ref(&go), versions_dir, current_dir),
@@ -633,8 +633,8 @@ mod tests {
 
     #[test]
     fn classify_multiple_all_managed_is_harmless() {
-        let versions_dir = std::path::Path::new("/gvm/versions");
-        let current_dir = std::path::Path::new("/gvm/current");
+        let versions_dir = std::path::Path::new("/gvsn/versions");
+        let current_dir = std::path::Path::new("/gvsn/current");
         let go1 = current_dir.join("bin/go");
         let go2 = versions_dir.join("go1.22.4/bin/go");
         assert_eq!(
@@ -644,9 +644,9 @@ mod tests {
     }
 
     #[test]
-    fn classify_multiple_shadowed_non_gvm() {
-        let versions_dir = std::path::Path::new("/gvm/versions");
-        let current_dir = std::path::Path::new("/gvm/current");
+    fn classify_multiple_shadowed_non_gvsn() {
+        let versions_dir = std::path::Path::new("/gvsn/versions");
+        let current_dir = std::path::Path::new("/gvsn/current");
         let active = current_dir.join("bin/go");
         let shadowed = std::path::PathBuf::from("/usr/local/go/bin/go");
         assert_eq!(
@@ -655,7 +655,7 @@ mod tests {
                 versions_dir,
                 current_dir
             ),
-            GoPathStatus::MultipleShadowedNonGvm {
+            GoPathStatus::MultipleShadowedNonGvsn {
                 active,
                 shadowed: vec![shadowed],
             }
@@ -664,8 +664,8 @@ mod tests {
 
     #[test]
     fn classify_multiple_active_not_managed() {
-        let versions_dir = std::path::Path::new("/gvm/versions");
-        let current_dir = std::path::Path::new("/gvm/current");
+        let versions_dir = std::path::Path::new("/gvsn/versions");
+        let current_dir = std::path::Path::new("/gvsn/current");
         let system_go = std::path::PathBuf::from("/usr/local/go/bin/go");
         let managed_go = versions_dir.join("go1.22.4/bin/go");
         let all = vec![system_go, managed_go];

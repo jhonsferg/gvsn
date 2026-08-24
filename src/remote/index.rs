@@ -1,7 +1,7 @@
 //! Functions for fetching and querying the go.dev release index.
 //!
 //! This module is the single point of contact with the remote API. All network
-//! requests made by `gvm` go through [`fetch_releases`].
+//! requests made by `gvsn` go through [`fetch_releases`].
 
 use std::path::Path;
 
@@ -12,7 +12,7 @@ use crate::{http::HttpClient, remote::release::Release, user_version::VersionSpe
 /// URL of the go.dev download API that lists all releases.
 const GO_DL_API: &str = "https://go.dev/dl/?mode=json&include=all";
 
-/// Cache file name, relative to the gvm root directory (`GVM_DIR`).
+/// Cache file name, relative to the gvsn root directory (`GVSN_DIR`).
 const CACHE_FILE: &str = "release-index.json";
 
 /// How long a cached release index is trusted before a fresh fetch is made.
@@ -132,7 +132,7 @@ pub fn resolve<'a>(spec: &VersionSpec, releases: &'a [Release]) -> Result<&'a Re
             .find(|r| r.go_version().is_some_and(|v| spec.matches(&v)))
             .ok_or_else(|| {
                 anyhow::anyhow!(
-                    "Go version '{}' not found. Run 'gvm list-remote' to see available versions.",
+                    "Go version '{}' not found. Run 'gvsn list-remote' to see available versions.",
                     spec
                 )
             }),

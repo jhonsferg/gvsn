@@ -1,7 +1,7 @@
 //! Local toolchain storage and version resolution.
 //!
-//! This module provides the interface between the rest of `gvm` and the
-//! on-disk toolchain store at `~/.gvm/versions/`. It handles:
+//! This module provides the interface between the rest of `gvsn` and the
+//! on-disk toolchain store at `~/.gvsn/versions/`. It handles:
 //!
 //! - Listing and querying installed versions.
 //! - Reading and writing the global default version file.
@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 use crate::{
     config::Config,
-    fs as gvm_fs, lock,
+    fs as gvsn_fs, lock,
     user_version::VersionSpec,
     version::{parse_tool_versions_golang_line, GoVersion, GO_VERSION_FILE, TOOL_VERSIONS_FILE},
 };
@@ -24,7 +24,7 @@ pub enum VersionSource {
     /// Activated by a `.go-version` or `.tool-versions` file found in the
     /// current directory tree.
     Local,
-    /// Activated by the global default stored in `~/.gvm/version`.
+    /// Activated by the global default stored in `~/.gvsn/version`.
     Global,
 }
 
@@ -74,7 +74,7 @@ pub fn is_installed(config: &Config, version: &GoVersion) -> bool {
     config.version_dir(&version.tag()).exists()
 }
 
-/// Reads the global default Go version from `~/.gvm/version`.
+/// Reads the global default Go version from `~/.gvsn/version`.
 ///
 /// # Errors
 ///
@@ -83,10 +83,10 @@ pub fn is_installed(config: &Config, version: &GoVersion) -> bool {
 pub fn global_version(config: &Config) -> Result<GoVersion> {
     let path = config.version_file();
     if !path.exists() {
-        bail!("No global Go version set. Run 'gvm use <version>'.");
+        bail!("No global Go version set. Run 'gvsn use <version>'.");
     }
     let raw = std::fs::read_to_string(&path)?.trim().to_string();
-    GoVersion::parse(&raw).context("Corrupted version file - run 'gvm use <version>'")
+    GoVersion::parse(&raw).context("Corrupted version file - run 'gvsn use <version>'")
 }
 
 /// Returns the active Go version and the source that determined it.
@@ -94,9 +94,9 @@ pub fn global_version(config: &Config) -> Result<GoVersion> {
 /// The resolution order is:
 ///
 /// 1. Walk up from the current working directory looking for `.go-version`
-///    (gvm's own pin file), then the asdf-compatible `.tool-versions` file
+///    (gvsn's own pin file), then the asdf-compatible `.tool-versions` file
 ///    (up to 20 levels to avoid infinite loops on unusual file systems).
-/// 2. Fall back to the global default stored in `~/.gvm/version`.
+/// 2. Fall back to the global default stored in `~/.gvsn/version`.
 ///
 /// # Errors
 ///
@@ -146,7 +146,7 @@ pub fn version_bin_path(config: &Config, version: &GoVersion) -> Result<PathBuf>
     let bin = config.version_bin_dir(&version.tag());
     if !bin.exists() {
         bail!(
-            "Go {} is not installed. Run 'gvm install {}'.",
+            "Go {} is not installed. Run 'gvsn install {}'.",
             version,
             version
         );
@@ -156,29 +156,29 @@ pub fn version_bin_path(config: &Config, version: &GoVersion) -> Result<PathBuf>
 
 // --- Mutations ---------------------------------------------------------------
 
-/// Writes `version` to the global default version file (`~/.gvm/version`).
+/// Writes `version` to the global default version file (`~/.gvsn/version`).
 fn write_global_version_file(config: &Config, version: &GoVersion) -> Result<()> {
     std::fs::write(config.version_file(), version.tag())
         .context("Failed to write global version file")
 }
 
-/// Updates the `~/.gvm/current` junction/symlink to point to `version`.
+/// Updates the `~/.gvsn/current` junction/symlink to point to `version`.
 ///
 /// This is what makes `go` visible to all shells (CMD, Git Bash, PowerShell)
 /// and editors (VSCode, GoLand) without any per-shell hook. The PATH entry
-/// `~/.gvm/current/bin` is added to the Windows registry once during install;
-/// afterwards only the junction target needs to change on every `gvm use`.
+/// `~/.gvsn/current/bin` is added to the Windows registry once during install;
+/// afterwards only the junction target needs to change on every `gvsn use`.
 fn write_current_link(config: &Config, version: &GoVersion) -> Result<()> {
     let link = config.current_dir();
     let target = config.version_dir(&version.tag());
-    gvm_fs::set_version_link(&link, &target)
+    gvsn_fs::set_version_link(&link, &target)
         .with_context(|| format!("Failed to update current link to {}", version.tag()))
 }
 
-/// Sets `version` as the active global version: writes `~/.gvm/version` and
-/// repoints the `~/.gvm/current` link, both under a single lock acquisition.
+/// Sets `version` as the active global version: writes `~/.gvsn/version` and
+/// repoints the `~/.gvsn/current` link, both under a single lock acquisition.
 ///
-/// Both writes happen under one locked section so another `gvm` process can
+/// Both writes happen under one locked section so another `gvsn` process can
 /// never observe (or interleave between) the version file and the `current`
 /// link pointing at different versions.
 ///
@@ -221,7 +221,7 @@ pub fn resolve_installed(config: &Config, spec: &VersionSpec) -> Result<GoVersio
             .into_iter()
             .find(|v| spec.matches(v))
             .ok_or_else(|| {
-                anyhow::anyhow!("Go {} is not installed. Run 'gvm install {}'.", spec, spec)
+                anyhow::anyhow!("Go {} is not installed. Run 'gvsn install {}'.", spec, spec)
             }),
     }
 }

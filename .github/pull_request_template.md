@@ -24,8 +24,8 @@
 
 ### Shell integration
 
-- [ ] If shell profile injection changed: verified idempotency (re-running `gvm setup` is safe)
-- [ ] If `inject_profile` / `remove_gvm_lines` changed: existing tests updated
+- [ ] If shell profile injection changed: verified idempotency (re-running `gvsn setup` is safe)
+- [ ] If `inject_profile` / `remove_gvsn_lines` changed: existing tests updated
 - [ ] If a new shell is added: all four implementations (bash, zsh, fish, powershell) updated
 
 ### Release impact

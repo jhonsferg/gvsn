@@ -7,12 +7,9 @@
 #   2. Commits authored by the maintainer's email in repos owned by someone else
 #      (catches renamed clones that still carry over the original commit history).
 #
-# Strategy 1 alone is noisy: "gvm" is not unique to this project (it also
-# stands for Greenbone Vulnerability Management, among others), so a plain
-# name search reliably turns up unrelated repos - confirmed in practice by
-# issue #53, where 3 of its 4 findings turned out to be unrelated projects
-# that merely share part of the name. Strategy 1 candidates are therefore run
-# through clone-similarity.sh, which checks actual file content (a
+# Strategy 1 alone can be noisy: a plain name search can turn up unrelated
+# repos that merely share part of the name. Strategy 1 candidates are
+# therefore run through clone-similarity.sh, which checks actual file content (a
 # distinctive source fingerprint, README overlap, Cargo.toml package name)
 # against this repository, and are only kept if the score clears
 # $CONTENT_SCORE_THRESHOLD. Strategy 2 candidates are not scored - sharing

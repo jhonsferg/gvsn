@@ -1,5 +1,5 @@
-//! Library crate exposing gvm's internals for the benchmark targets under
-//! `benches/`. The `gvm` binary (`src/main.rs`) is a thin wrapper around
+//! Library crate exposing gvsn's internals for the benchmark targets under
+//! `benches/`. The `gvsn` binary (`src/main.rs`) is a thin wrapper around
 //! [`run`]; every module listed here is the exact same code that ships in
 //! the binary, just also reachable from outside `src/main.rs`.
 //!
@@ -13,7 +13,7 @@ pub mod commands;
 pub mod config;
 pub mod dispatch;
 pub mod fs;
-pub mod gvm_release;
+pub mod gvsn_release;
 pub mod http;
 pub mod lock;
 pub mod profile;

@@ -1,4 +1,4 @@
-//! `gvm local` - pin a Go version for the current project.
+//! `gvsn local` - pin a Go version for the current project.
 //!
 //! Writes a `.go-version` file in the current working directory. The shell
 //! hook reads this file on every directory change and activates the pinned
@@ -35,7 +35,7 @@ pub fn run(config: &Config, spec_str: &str) -> Result<()> {
                     "{} Go {} is not installed yet. Run {} first.",
                     "!".yellow(),
                     tag.bold(),
-                    format!("gvm install {tag}").cyan()
+                    format!("gvsn install {tag}").cyan()
                 );
             }
         }

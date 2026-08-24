@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest a new capability or improvement for gvm
+about: Suggest a new capability or improvement for gvsn
 title: "feat: "
 labels: enhancement
 assignees: jhonsferg
@@ -18,7 +18,7 @@ assignees: jhonsferg
 
 ```sh
 # Example usage
-gvm <new-command> [flags]
+gvsn <new-command> [flags]
 ```
 
 ## Alternatives considered

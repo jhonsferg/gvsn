@@ -1,16 +1,16 @@
 #!/usr/bin/env pwsh
-# gvm (Go Version Manager) - Windows installer
+# gvsn (Go Version Manager) - Windows installer
 #
 # Usage (one-liner):
-#   irm https://raw.githubusercontent.com/jhonsferg/gvm-rs/main/install/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/jhonsferg/gvsn/main/install/install.ps1 | iex
 #
 # Customise with environment variables before piping:
-#   $env:GVM_INSTALL_DIR = "$env:USERPROFILE\.local\bin"
-#   $env:GVM_VERSION     = "v1.0.0"
+#   $env:GVSN_INSTALL_DIR = "$env:USERPROFILE\.local\bin"
+#   $env:GVSN_VERSION     = "v1.0.0"
 #
 # Override base URLs for local/offline testing:
-#   $env:GVM_TEST_API_BASE = "http://localhost:8765"   # replaces https://api.github.com
-#   $env:GVM_TEST_DL_BASE  = "http://localhost:8765"   # replaces https://github.com
+#   $env:GVSN_TEST_API_BASE = "http://localhost:8765"   # replaces https://api.github.com
+#   $env:GVSN_TEST_DL_BASE  = "http://localhost:8765"   # replaces https://github.com
 
 $ErrorActionPreference = "Stop"
 
@@ -28,11 +28,11 @@ try {
         [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls13
 } catch {}
 
-$REPO        = "jhonsferg/gvm-rs"
-$InstallDir  = if ($env:GVM_INSTALL_DIR)    { $env:GVM_INSTALL_DIR }    else { "$env:USERPROFILE\.local\bin" }
-$Version     = if ($env:GVM_VERSION)        { $env:GVM_VERSION }        else { "latest" }
-$ApiBase     = if ($env:GVM_TEST_API_BASE)  { $env:GVM_TEST_API_BASE }  else { "https://api.github.com" }
-$DlBase      = if ($env:GVM_TEST_DL_BASE)   { $env:GVM_TEST_DL_BASE }   else { "https://github.com" }
+$REPO        = "jhonsferg/gvsn"
+$InstallDir  = if ($env:GVSN_INSTALL_DIR)    { $env:GVSN_INSTALL_DIR }    else { "$env:USERPROFILE\.local\bin" }
+$Version     = if ($env:GVSN_VERSION)        { $env:GVSN_VERSION }        else { "latest" }
+$ApiBase     = if ($env:GVSN_TEST_API_BASE)  { $env:GVSN_TEST_API_BASE }  else { "https://api.github.com" }
+$DlBase      = if ($env:GVSN_TEST_DL_BASE)   { $env:GVSN_TEST_DL_BASE }   else { "https://github.com" }
 
 # -- Terminal helpers ----------------------------------------------------------
 function Write-Step([string]$msg) { Write-Host "  -> $msg" -ForegroundColor Cyan }
@@ -75,7 +75,7 @@ function Invoke-DownloadWithRetry([string]$Uri, [string]$OutFile, [int]$Retries 
 }
 
 Write-Host ""
-Write-Host "  gvm" -ForegroundColor Cyan -NoNewline
+Write-Host "  gvsn" -ForegroundColor Cyan -NoNewline
 Write-Host " -- Go Version Manager installer" -ForegroundColor White
 Write-Host ""
 
@@ -103,7 +103,7 @@ if ($Version -eq "latest") {
     catch {
         $status = Get-HttpStatusCode $_
         if ($status -eq 403) {
-            Abort "GitHub API rate limit exceeded (HTTP 403). Try again later, or set `$env:GVM_VERSION explicitly."
+            Abort "GitHub API rate limit exceeded (HTTP 403). Try again later, or set `$env:GVSN_VERSION explicitly."
         }
         elseif ($status) {
             Abort "Could not fetch latest version (HTTP $status): $_"
@@ -114,19 +114,19 @@ if ($Version -eq "latest") {
     }
 }
 
-Write-Step "Installing gvm $Version"
+Write-Step "Installing gvsn $Version"
 
 # -- 3. Download archive -------------------------------------------------------
-$ArchiveName   = "gvm_windows_$Arch.zip"
+$ArchiveName   = "gvsn_windows_$Arch.zip"
 $DownloadUrl   = "$DlBase/$REPO/releases/download/$Version/$ArchiveName"
 $ChecksumsUrl  = "$DlBase/$REPO/releases/download/$Version/checksums.txt"
 $TmpZip        = [System.IO.Path]::Combine(
                      [System.IO.Path]::GetTempPath(),
-                     "gvm-install-$([System.Guid]::NewGuid()).zip"
+                     "gvsn-install-$([System.Guid]::NewGuid()).zip"
                  )
 $TmpChecksums  = [System.IO.Path]::Combine(
                      [System.IO.Path]::GetTempPath(),
-                     "gvm-install-$([System.Guid]::NewGuid()).checksums.txt"
+                     "gvsn-install-$([System.Guid]::NewGuid()).checksums.txt"
                  )
 
 Write-Step "Downloading $ArchiveName from $DownloadUrl..."
@@ -169,19 +169,19 @@ if (-not (Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 }
 
-$Dest       = Join-Path $InstallDir "gvm.exe"
+$Dest       = Join-Path $InstallDir "gvsn.exe"
 $TmpExtract = [System.IO.Path]::Combine(
                   [System.IO.Path]::GetTempPath(),
-                  "gvm-install-extract-$([System.Guid]::NewGuid())"
+                  "gvsn-install-extract-$([System.Guid]::NewGuid())"
               )
 
 Write-Step "Extracting..."
 
 try {
     Expand-Archive -Path $TmpZip -DestinationPath $TmpExtract -Force
-    $ExtractedExe = Join-Path $TmpExtract "gvm.exe"
+    $ExtractedExe = Join-Path $TmpExtract "gvsn.exe"
     if (-not (Test-Path $ExtractedExe)) {
-        Abort "Archive did not contain gvm.exe"
+        Abort "Archive did not contain gvsn.exe"
     }
     if (Test-Path $Dest) { Remove-Item -Force $Dest -ErrorAction SilentlyContinue }
     Move-Item -Force $ExtractedExe $Dest
@@ -204,7 +204,7 @@ catch {
     Abort "Installed binary failed to run: $_"
 }
 
-# -- 5. Run gvm setup ----------------------------------------------------------
+# -- 5. Run gvsn setup ----------------------------------------------------------
 # Run setup via full path so it works even before InstallDir is on PATH.
 Write-Host ""
 Write-Host "  Configuring shell environment..." -ForegroundColor White
@@ -213,13 +213,13 @@ Write-Host ""
 
 # -- 6. Summary ----------------------------------------------------------------
 Write-Host ""
-Write-Host "  gvm $Version installed and configured!" -ForegroundColor Green
+Write-Host "  gvsn $Version installed and configured!" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Next steps:" -ForegroundColor White
 Write-Host ""
 Write-Host "  1. Restart your terminal, then install and activate Go:" -ForegroundColor White
-Write-Host "       gvm install latest" -ForegroundColor Cyan
-Write-Host "       gvm use latest" -ForegroundColor Cyan
+Write-Host "       gvsn install latest" -ForegroundColor Cyan
+Write-Host "       gvsn use latest" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  Run 'gvm doctor' to verify the setup." -ForegroundColor DarkGray
+Write-Host "  Run 'gvsn doctor' to verify the setup." -ForegroundColor DarkGray
 Write-Host ""

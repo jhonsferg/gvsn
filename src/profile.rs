@@ -10,7 +10,7 @@ use std::path::Path;
 /// A single block in a shell profile file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProfileBlock {
-    /// The marker that identifies this block (e.g., "# gvm init")
+    /// The marker that identifies this block (e.g., "# gvsn init")
     pub marker: String,
     /// The content lines of the block (without the marker line)
     pub lines: Vec<String>,
@@ -42,20 +42,20 @@ impl std::fmt::Display for ProfileBlock {
 /// Represents a parsed shell profile file.
 #[derive(Debug, Clone, Default)]
 pub struct ShellProfile {
-    /// Lines before the first gvm block
+    /// Lines before the first gvsn block
     pub header: Vec<String>,
-    /// Gvm-managed blocks in order
+    /// Gvsn-managed blocks in order
     pub blocks: Vec<ProfileBlock>,
-    /// Lines after the last gvm block
+    /// Lines after the last gvsn block
     pub footer: Vec<String>,
 }
 
-/// Known gvm block markers
+/// Known gvsn block markers
 pub const MARKERS: &[&str] = &[
-    "# gvm init",
-    "# gvm wrapper",
-    "# gvm path",
-    "# gvm: binary location",
+    "# gvsn init",
+    "# gvsn wrapper",
+    "# gvsn path",
+    "# gvsn: binary location",
 ];
 
 impl ShellProfile {
@@ -63,18 +63,18 @@ impl ShellProfile {
     pub fn parse(content: &str) -> Self {
         let mut profile = Self::default();
         let mut current_block: Option<ProfileBlock> = None;
-        let mut in_gvm_block = false;
+        let mut in_gvsn_block = false;
         let mut header_done = false;
 
         for line in content.lines() {
             let trimmed = line.trim();
 
-            // Check if this line starts a gvm block. Markers are always
+            // Check if this line starts a gvsn block. Markers are always
             // written as a complete line (see `ProfileBlock`'s `Display`
             // impl), so matching must be exact - `starts_with` would also
             // catch unrelated user comments that merely begin with the same
-            // text (e.g. "# gvm init fue lo primero que probe"), corrupting
-            // them into a gvm-managed block on the next `gvm setup`/`implode`.
+            // text (e.g. "# gvsn init fue lo primero que probe"), corrupting
+            // them into a gvsn-managed block on the next `gvsn setup`/`implode`.
             if let Some(marker) = MARKERS.iter().find(|m| trimmed == **m) {
                 // Finish previous block if any
                 if let Some(block) = current_block.take() {
@@ -85,18 +85,18 @@ impl ShellProfile {
                     marker.to_string(),
                     std::iter::empty::<String>(),
                 ));
-                in_gvm_block = true;
+                in_gvsn_block = true;
                 header_done = true;
                 continue;
             }
 
-            if in_gvm_block {
+            if in_gvsn_block {
                 // End of block on blank line
                 if trimmed.is_empty() {
                     if let Some(block) = current_block.take() {
                         profile.blocks.push(block);
                     }
-                    in_gvm_block = false;
+                    in_gvsn_block = false;
                     // Don't add the blank line to footer - it's just a separator
                     continue;
                 }
@@ -204,11 +204,11 @@ pub fn save_profile(path: &Path, profile: &ShellProfile) -> Result<()> {
     Ok(())
 }
 
-/// Updates or adds the gvm path block in the login profile.
+/// Updates or adds the gvsn path block in the login profile.
 #[cfg(not(target_os = "windows"))]
 pub fn update_path_block(path: &Path) -> Result<bool> {
-    const MARKER: &str = "# gvm path";
-    const EXPORT_LINE: &str = r#"export PATH="$HOME/.gvm/current/bin:$PATH""#;
+    const MARKER: &str = "# gvsn path";
+    const EXPORT_LINE: &str = r#"export PATH="$HOME/.gvsn/current/bin:$PATH""#;
 
     let mut profile = load_profile(path)?;
     let expected_lines = vec![EXPORT_LINE.to_string()];
@@ -221,8 +221,8 @@ pub fn update_path_block(path: &Path) -> Result<bool> {
     Ok(changed)
 }
 
-/// Removes all gvm-managed blocks from a profile.
-pub fn strip_gvm_blocks(path: &Path) -> Result<bool> {
+/// Removes all gvsn-managed blocks from a profile.
+pub fn strip_gvsn_blocks(path: &Path) -> Result<bool> {
     if !path.exists() {
         return Ok(false);
     }
@@ -236,7 +236,7 @@ pub fn strip_gvm_blocks(path: &Path) -> Result<bool> {
     Ok(changed)
 }
 
-/// Ensures a profile has the required gvm blocks with correct content.
+/// Ensures a profile has the required gvsn blocks with correct content.
 ///
 /// Returns true if the profile was modified.
 pub fn ensure_profile(path: &Path, init_content: &str, wrapper_content: &str) -> Result<bool> {
@@ -251,14 +251,14 @@ pub fn ensure_profile(path: &Path, init_content: &str, wrapper_content: &str) ->
     let mut modified = false;
 
     // Check/update init block
-    if !profile.has_block_with_content("# gvm init", &expected_init) {
-        profile.set_block(ProfileBlock::new("# gvm init", expected_init));
+    if !profile.has_block_with_content("# gvsn init", &expected_init) {
+        profile.set_block(ProfileBlock::new("# gvsn init", expected_init));
         modified = true;
     }
 
     // Check/update wrapper block
-    if !profile.has_block_with_content("# gvm wrapper", &expected_wrapper) {
-        profile.set_block(ProfileBlock::new("# gvm wrapper", expected_wrapper));
+    if !profile.has_block_with_content("# gvsn wrapper", &expected_wrapper) {
+        profile.set_block(ProfileBlock::new("# gvsn wrapper", expected_wrapper));
         modified = true;
     }
 
@@ -293,13 +293,13 @@ mod tests {
 
     #[test]
     fn parse_single_block() {
-        let content = "# gvm init\neval \"$(gvm env --shell bash)\"\n";
+        let content = "# gvsn init\neval \"$(gvsn env --shell bash)\"\n";
         let profile = ShellProfile::parse(content);
         assert_eq!(profile.blocks.len(), 1);
-        assert_eq!(profile.blocks[0].marker, "# gvm init");
+        assert_eq!(profile.blocks[0].marker, "# gvsn init");
         assert_eq!(
             profile.blocks[0].lines,
-            vec!["eval \"$(gvm env --shell bash)\""]
+            vec!["eval \"$(gvsn env --shell bash)\""]
         );
     }
 
@@ -307,17 +307,17 @@ mod tests {
     fn parse_ignores_user_comment_with_marker_prefix() {
         // A user comment that merely starts with a marker's text (but isn't
         // the marker itself) must stay in the header/footer, not be treated
-        // as the start of a gvm-managed block.
-        let content = "# gvm initially I used zsh\nexport FOO=bar\n";
+        // as the start of a gvsn-managed block.
+        let content = "# gvsn initially I used zsh\nexport FOO=bar\n";
         let profile = ShellProfile::parse(content);
         assert!(
             profile.blocks.is_empty(),
-            "a prefix match must not be treated as a gvm block"
+            "a prefix match must not be treated as a gvsn block"
         );
         assert_eq!(
             profile.header,
             vec![
-                "# gvm initially I used zsh".to_string(),
+                "# gvsn initially I used zsh".to_string(),
                 "export FOO=bar".to_string(),
             ]
         );
@@ -326,27 +326,27 @@ mod tests {
     #[test]
     fn parse_multiple_blocks() {
         let content = r#"# user config
-# gvm init
-eval "$(gvm env --shell bash)"
+# gvsn init
+eval "$(gvsn env --shell bash)"
 
-# gvm wrapper
-gvm() { command gvm "$@"; }
+# gvsn wrapper
+gvsn() { command gvsn "$@"; }
 
 # more config
 "#;
         let profile = ShellProfile::parse(content);
         assert_eq!(profile.header.len(), 1);
         assert_eq!(profile.blocks.len(), 2);
-        assert_eq!(profile.blocks[0].marker, "# gvm init");
-        assert_eq!(profile.blocks[1].marker, "# gvm wrapper");
+        assert_eq!(profile.blocks[0].marker, "# gvsn init");
+        assert_eq!(profile.blocks[1].marker, "# gvsn wrapper");
         assert_eq!(profile.footer.len(), 1);
     }
 
     #[test]
     fn block_replacement() {
-        let mut profile = ShellProfile::parse("# gvm init\nold content\n");
+        let mut profile = ShellProfile::parse("# gvsn init\nold content\n");
         profile.set_block(ProfileBlock::new(
-            "# gvm init",
+            "# gvsn init",
             vec!["new content".to_string()],
         ));
         assert_eq!(profile.blocks[0].lines, vec!["new content"]);
@@ -355,11 +355,11 @@ gvm() { command gvm "$@"; }
     #[test]
     fn serialization_roundtrip() {
         let content = r#"# header
-# gvm init
-eval "$(gvm env --shell bash)"
+# gvsn init
+eval "$(gvsn env --shell bash)"
 
-# gvm wrapper
-gvm() { command gvm "$@"; }
+# gvsn wrapper
+gvsn() { command gvsn "$@"; }
 
 # footer
 "#;
@@ -378,12 +378,12 @@ gvm() { command gvm "$@"; }
         let path = dir.path().join("profile");
 
         // Write initial
-        fs::write(&path, "# header\n# gvm init\nold\n").unwrap();
+        fs::write(&path, "# header\n# gvsn init\nold\n").unwrap();
 
         // Load and modify
         let mut profile = load_profile(&path).unwrap();
         assert_eq!(profile.blocks.len(), 1);
-        profile.set_block(ProfileBlock::new("# gvm init", vec!["new".to_string()]));
+        profile.set_block(ProfileBlock::new("# gvsn init", vec!["new".to_string()]));
         save_profile(&path, &profile).unwrap();
 
         // Verify
@@ -402,8 +402,8 @@ gvm() { command gvm "$@"; }
         assert!(changed);
 
         let content = fs::read_to_string(&path).unwrap();
-        assert!(content.contains("# gvm path"));
-        assert!(content.contains(r#"export PATH="$HOME/.gvm/current/bin:$PATH""#));
+        assert!(content.contains("# gvsn path"));
+        assert!(content.contains(r#"export PATH="$HOME/.gvsn/current/bin:$PATH""#));
     }
 
     #[test]
@@ -418,7 +418,7 @@ gvm() { command gvm "$@"; }
         assert!(!changed_again, "second call must report no change");
 
         let content = fs::read_to_string(&path).unwrap();
-        assert_eq!(content.matches("# gvm path").count(), 1);
+        assert_eq!(content.matches("# gvsn path").count(), 1);
     }
 
     #[test]
@@ -432,7 +432,7 @@ gvm() { command gvm "$@"; }
 
         let content = fs::read_to_string(&path).unwrap();
         assert!(content.contains("export FOO=bar"));
-        assert!(content.contains("# gvm path"));
+        assert!(content.contains("# gvsn path"));
     }
 
     #[test]
@@ -442,25 +442,25 @@ gvm() { command gvm "$@"; }
 
         let modified = ensure_profile(
             &path,
-            "eval \"$(gvm env --shell bash)\"",
-            "gvm() { command gvm \"$@\"; }",
+            "eval \"$(gvsn env --shell bash)\"",
+            "gvsn() { command gvsn \"$@\"; }",
         )
         .unwrap();
         assert!(modified);
 
         let content = fs::read_to_string(&path).unwrap();
-        assert!(content.contains("# gvm init"));
-        assert!(content.contains("eval \"$(gvm env --shell bash)\""));
-        assert!(content.contains("# gvm wrapper"));
-        assert!(content.contains("gvm() { command gvm \"$@\"; }"));
+        assert!(content.contains("# gvsn init"));
+        assert!(content.contains("eval \"$(gvsn env --shell bash)\""));
+        assert!(content.contains("# gvsn wrapper"));
+        assert!(content.contains("gvsn() { command gvsn \"$@\"; }"));
     }
 
     #[test]
     fn ensure_profile_is_idempotent() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("profile");
-        let init = "eval \"$(gvm env --shell bash)\"";
-        let wrapper = "gvm() { command gvm \"$@\"; }";
+        let init = "eval \"$(gvsn env --shell bash)\"";
+        let wrapper = "gvsn() { command gvsn \"$@\"; }";
 
         assert!(ensure_profile(&path, init, wrapper).unwrap());
         let changed_again = ensure_profile(&path, init, wrapper).unwrap();
@@ -471,8 +471,8 @@ gvm() { command gvm "$@"; }
     fn ensure_profile_updates_stale_content() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("profile");
-        let old_wrapper = "gvm() { command gvm \"$@\"; }";
-        let new_wrapper = "gvm() { command gvm \"$@\"; case \"$1\" in use) gvm env;; esac; }";
+        let old_wrapper = "gvsn() { command gvsn \"$@\"; }";
+        let new_wrapper = "gvsn() { command gvsn \"$@\"; case \"$1\" in use) gvsn env;; esac; }";
 
         ensure_profile(&path, "eval init", old_wrapper).unwrap();
         let modified = ensure_profile(&path, "eval init", new_wrapper).unwrap();
@@ -491,16 +491,16 @@ gvm() { command gvm "$@"; }
         // Include blank line before footer so parser treats it as footer, not part of wrapper block
         fs::write(
             &path,
-            "# header\n# gvm init\ncontent\n\n# gvm wrapper\nmore\n\n# footer\n",
+            "# header\n# gvsn init\ncontent\n\n# gvsn wrapper\nmore\n\n# footer\n",
         )
         .unwrap();
 
-        let changed = strip_gvm_blocks(&path).unwrap();
+        let changed = strip_gvsn_blocks(&path).unwrap();
         assert!(changed);
 
         let content = fs::read_to_string(&path).unwrap();
-        assert!(!content.contains("# gvm init"));
-        assert!(!content.contains("# gvm wrapper"));
+        assert!(!content.contains("# gvsn init"));
+        assert!(!content.contains("# gvsn wrapper"));
         assert!(content.contains("# header"));
         assert!(content.contains("# footer"));
     }

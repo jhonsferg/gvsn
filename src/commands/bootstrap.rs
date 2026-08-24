@@ -27,7 +27,7 @@ pub struct Bootstrap {
 /// Resolves the bootstrap Go compiler to use.
 ///
 /// Priority:
-/// 1. `--bootstrap VERSION` - must already be installed via gvm.
+/// 1. `--bootstrap VERSION` - must already be installed via gvsn.
 /// 2. Previous version (patch-1, or latest of minor-1 when patch==0) if installed locally.
 /// 3. Download that same previous version temporarily; removed after compilation.
 pub fn resolve_bootstrap(
@@ -42,7 +42,7 @@ pub fn resolve_bootstrap(
         let spec = VersionSpec::parse(spec_str)?;
         let bv = toolchain::resolve_installed(config, &spec).map_err(|_| {
             anyhow!(
-                "Bootstrap version '{}' is not installed. Run 'gvm install {}' first.",
+                "Bootstrap version '{}' is not installed. Run 'gvsn install {}' first.",
                 spec_str,
                 spec_str
             )
@@ -83,7 +83,7 @@ pub fn resolve_bootstrap(
     let b_release = index::resolve(&prev_spec, releases).with_context(|| {
         format!(
             "Could not find a bootstrap release for {}. \
-             Install a Go version first with 'gvm install latest', \
+             Install a Go version first with 'gvsn install latest', \
              or specify one with --bootstrap.",
             prev_spec
         )

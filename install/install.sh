@@ -1,23 +1,23 @@
 #!/bin/sh
-# gvm (Go Version Manager) -- Linux and macOS installer
+# gvsn (Go Version Manager) -- Linux and macOS installer
 #
 # Usage (one-liner):
-#   curl -fsSL https://raw.githubusercontent.com/jhonsferg/gvm-rs/main/install/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/jhonsferg/gvsn/main/install/install.sh | sh
 #
 # Customise with environment variables before piping:
-#   GVM_INSTALL_DIR=$HOME/.local/bin GVM_VERSION=v1.0.0 curl -fsSL ... | sh
+#   GVSN_INSTALL_DIR=$HOME/.local/bin GVSN_VERSION=v1.0.0 curl -fsSL ... | sh
 
 set -eu
 
-REPO="${GVM_REPO:-jhonsferg/gvm-rs}"
-INSTALL_DIR="${GVM_INSTALL_DIR:-$HOME/.local/bin}"
-GVM_VERSION="${GVM_VERSION:-latest}"
+REPO="${GVSN_REPO:-jhonsferg/gvsn}"
+INSTALL_DIR="${GVSN_INSTALL_DIR:-$HOME/.local/bin}"
+GVSN_VERSION="${GVSN_VERSION:-latest}"
 
 # Override base URLs for local/offline testing:
-#   GVM_TEST_API_BASE=http://localhost:8765
-#   GVM_TEST_DL_BASE=http://localhost:8765
-API_BASE="${GVM_TEST_API_BASE:-https://api.github.com}"
-DL_BASE="${GVM_TEST_DL_BASE:-https://github.com}"
+#   GVSN_TEST_API_BASE=http://localhost:8765
+#   GVSN_TEST_DL_BASE=http://localhost:8765
+API_BASE="${GVSN_TEST_API_BASE:-https://api.github.com}"
+DL_BASE="${GVSN_TEST_DL_BASE:-https://github.com}"
 
 # -- Terminal helpers ----------------------------------------------------------
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
@@ -35,7 +35,7 @@ step() { printf "  ${C_CYAN}->${C_RESET} %s\n" "$1"; }
 ok()   { printf "  ${C_GREEN}v ${C_RESET} %s\n" "$1"; }
 die()  { printf "  ${C_RED}x ${C_RESET} %s\n" "$1" >&2; exit 1; }
 
-printf "\n  ${C_BOLD}${C_CYAN}gvm${C_RESET}${C_BOLD} -- Go Version Manager${C_RESET} installer\n\n"
+printf "\n  ${C_BOLD}${C_CYAN}gvsn${C_RESET}${C_BOLD} -- Go Version Manager${C_RESET} installer\n\n"
 
 # -- 1. Check required tools ---------------------------------------------------
 need() {
@@ -90,36 +90,36 @@ fi
 step "Detected platform: $PLATFORM-$ARCH"
 
 # -- 3. Resolve version --------------------------------------------------------
-if [ "$GVM_VERSION" = "latest" ]; then
+if [ "$GVSN_VERSION" = "latest" ]; then
     step "Fetching latest release from $API_BASE..."
     API_RESPONSE="$(curl -sSL --retry 3 --max-time 30 -w '\n%{http_code}' "$API_BASE/repos/$REPO/releases/latest")" \
         || die "Could not reach $API_BASE. Check your internet connection."
     API_STATUS="$(printf '%s' "$API_RESPONSE" | tail -n 1)"
     API_BODY="$(printf '%s' "$API_RESPONSE" | sed '$d')"
     if [ "$API_STATUS" = "403" ]; then
-        die "GitHub API rate limit exceeded (HTTP 403). Try again later, or set GVM_VERSION explicitly."
+        die "GitHub API rate limit exceeded (HTTP 403). Try again later, or set GVSN_VERSION explicitly."
     fi
     if [ "$API_STATUS" != "200" ]; then
         die "Failed to resolve the latest version (HTTP $API_STATUS)."
     fi
-    GVM_VERSION="$(printf '%s' "$API_BODY" | grep '"tag_name"' | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
-    [ -n "$GVM_VERSION" ] || die "Failed to parse the latest version from the GitHub API response."
+    GVSN_VERSION="$(printf '%s' "$API_BODY" | grep '"tag_name"' | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
+    [ -n "$GVSN_VERSION" ] || die "Failed to parse the latest version from the GitHub API response."
 fi
 
-step "Installing gvm $GVM_VERSION"
+step "Installing gvsn $GVSN_VERSION"
 
 # -- 4. Download archive -------------------------------------------------------
-ARCHIVE="gvm_${PLATFORM}_${ARCH}.tar.gz"
-URL="$DL_BASE/$REPO/releases/download/$GVM_VERSION/$ARCHIVE"
-CHECKSUMS_URL="$DL_BASE/$REPO/releases/download/$GVM_VERSION/checksums.txt"
-TMP_FILE="$(mktemp "${TMPDIR:-/tmp}/gvm-install.XXXXXX")"
-CHECKSUMS_FILE="$(mktemp "${TMPDIR:-/tmp}/gvm-checksums.XXXXXX")"
+ARCHIVE="gvsn_${PLATFORM}_${ARCH}.tar.gz"
+URL="$DL_BASE/$REPO/releases/download/$GVSN_VERSION/$ARCHIVE"
+CHECKSUMS_URL="$DL_BASE/$REPO/releases/download/$GVSN_VERSION/checksums.txt"
+TMP_FILE="$(mktemp "${TMPDIR:-/tmp}/gvsn-install.XXXXXX")"
+CHECKSUMS_FILE="$(mktemp "${TMPDIR:-/tmp}/gvsn-checksums.XXXXXX")"
 
 trap 'rm -f "$TMP_FILE" "$CHECKSUMS_FILE"' EXIT INT TERM
 
 step "Downloading $ARCHIVE..."
 if ! curl -fSL --retry 3 --retry-delay 2 --max-time 300 --progress-bar "$URL" -o "$TMP_FILE"; then
-    die "Download failed.\n  URL: $URL\n  Check that release $GVM_VERSION exists."
+    die "Download failed.\n  URL: $URL\n  Check that release $GVSN_VERSION exists."
 fi
 
 step "Verifying checksum..."
@@ -137,21 +137,21 @@ ok "Checksum verified"
 # -- 5. Extract and install binary ---------------------------------------------
 mkdir -p "$INSTALL_DIR"
 step "Extracting..."
-if ! tar xzf "$TMP_FILE" -C "$INSTALL_DIR" gvm; then
+if ! tar xzf "$TMP_FILE" -C "$INSTALL_DIR" gvsn; then
     die "Extraction failed. The archive may be corrupted."
 fi
-chmod +x "$INSTALL_DIR/gvm"
-ok "Installed to $INSTALL_DIR/gvm"
+chmod +x "$INSTALL_DIR/gvsn"
+ok "Installed to $INSTALL_DIR/gvsn"
 
-# -- 6. Run gvm setup ----------------------------------------------------------
+# -- 6. Run gvsn setup ----------------------------------------------------------
 # Run setup via full path so it works even before INSTALL_DIR is on PATH.
 printf "\n  ${C_BOLD}Configuring shell environment...${C_RESET}\n\n"
-"$INSTALL_DIR/gvm" setup
+"$INSTALL_DIR/gvsn" setup
 
 # -- 7. Summary ----------------------------------------------------------------
-printf "\n  ${C_GREEN}${C_BOLD}gvm $GVM_VERSION installed and configured!${C_RESET}\n\n"
+printf "\n  ${C_GREEN}${C_BOLD}gvsn $GVSN_VERSION installed and configured!${C_RESET}\n\n"
 printf "  Next steps:\n\n"
 printf "  1. Restart your shell (or source your profile), then install Go:\n"
-printf "       ${C_CYAN}gvm install latest${C_RESET}\n"
-printf "       ${C_CYAN}gvm use latest${C_RESET}\n\n"
-printf "  Run ${C_CYAN}gvm doctor${C_RESET} to verify the setup.\n\n"
+printf "       ${C_CYAN}gvsn install latest${C_RESET}\n"
+printf "       ${C_CYAN}gvsn use latest${C_RESET}\n\n"
+printf "  Run ${C_CYAN}gvsn doctor${C_RESET} to verify the setup.\n\n"

@@ -1,4 +1,4 @@
-//! Download and verification logic for `gvm install`.
+//! Download and verification logic for `gvsn install`.
 
 use anyhow::{anyhow, Context, Result};
 use colored::Colorize;

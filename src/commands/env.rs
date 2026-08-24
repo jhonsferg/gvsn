@@ -1,14 +1,14 @@
-//! `gvm env` - emit shell initialisation commands.
+//! `gvsn env` - emit shell initialisation commands.
 //!
-//! Generates the shell script that sets `GVM_DIR`, `PATH`, and `GOROOT` for
+//! Generates the shell script that sets `GVSN_DIR`, `PATH`, and `GOROOT` for
 //! the active Go version, and registers the `cd` hook that keeps those
 //! variables in sync as the user navigates the file system.
 //!
 //! The output is meant to be evaluated by the shell, not executed as a script:
 //!
-//! - Bash / Zsh: `eval "$(gvm env --shell bash)"`
-//! - Fish: `gvm env --shell fish | source`
-//! - PowerShell: `gvm env --shell powershell | Out-String | Invoke-Expression`
+//! - Bash / Zsh: `eval "$(gvsn env --shell bash)"`
+//! - Fish: `gvsn env --shell fish | source`
+//! - PowerShell: `gvsn env --shell powershell | Out-String | Invoke-Expression`
 
 use anyhow::Result;
 
@@ -23,7 +23,7 @@ use crate::{
 ///
 /// The target shell is taken from `shell_str` when provided, otherwise it is
 /// auto-detected from the environment via [`shell::detect`]. If no version is
-/// currently active, the script still sets `GVM_DIR` and installs the hook,
+/// currently active, the script still sets `GVSN_DIR` and installs the hook,
 /// but omits the `PATH` and `GOROOT` assignments.
 ///
 /// # Errors
@@ -43,7 +43,7 @@ pub fn run(config: &Config, shell_str: Option<&str>) -> Result<()> {
             Err(_) => {
                 if src == VersionSource::Local {
                     eprintln!(
-                        "gvm: Go {} (from .go-version or .tool-versions) is not installed. Run: gvm install {}",
+                        "gvsn: Go {} (from .go-version or .tool-versions) is not installed. Run: gvsn install {}",
                         v, v
                     );
                 }
@@ -54,7 +54,7 @@ pub fn run(config: &Config, shell_str: Option<&str>) -> Result<()> {
     };
 
     let ctx = EnvContext {
-        gvm_dir: &config.root,
+        gvsn_dir: &config.root,
         active_bin: active_bin.as_deref(),
         active_root: active_root.as_deref(),
     };

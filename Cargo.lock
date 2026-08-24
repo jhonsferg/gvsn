@@ -706,7 +706,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gvm-rs"
+name = "gvsn"
 version = "1.5.1"
 dependencies = [
  "anyhow",

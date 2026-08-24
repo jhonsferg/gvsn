@@ -2,7 +2,7 @@
 //!
 //! The structs in this module are deserialised directly from the JSON response
 //! of `https://go.dev/dl/?mode=json&include=all`. Only the fields required by
-//! `gvm` are used; the rest are retained to avoid deserialisation errors if
+//! `gvsn` are used; the rest are retained to avoid deserialisation errors if
 //! the API adds new fields.
 
 use crate::version::GoVersion;
@@ -41,7 +41,7 @@ pub struct ReleaseFile {
     /// File size in bytes.
     pub size: u64,
 
-    /// File kind. Only `"archive"` files are used by `gvm`; others
+    /// File kind. Only `"archive"` files are used by `gvsn`; others
     /// (`"source"`, `"installer"`) are ignored.
     pub kind: String,
 }

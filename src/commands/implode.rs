@@ -1,10 +1,10 @@
-//! `gvm implode` - completely remove gvm from the system.
+//! `gvsn implode` - completely remove gvsn from the system.
 //!
 //! Removes, in order:
-//! 1. The entire gvm data directory (`~/.gvm`) containing all installed Go
+//! 1. The entire gvsn data directory (`~/.gvsn`) containing all installed Go
 //!    versions.
-//! 2. The `gvm` binary itself.
-//! 3. Every gvm-managed line from the detected shell's profile file.
+//! 2. The `gvsn` binary itself.
+//! 3. Every gvsn-managed line from the detected shell's profile file.
 //!
 //! A summary of what will be deleted is always printed before any action is
 //! taken. When `--force` is omitted the user must confirm with `y`/`yes`.
@@ -15,7 +15,7 @@ use std::path::Path;
 
 use crate::{config::Config, lock, prompt, shell};
 
-/// Completely removes gvm and all associated data from the system.
+/// Completely removes gvsn and all associated data from the system.
 ///
 /// `force` skips the interactive confirmation prompt; everything else is
 /// identical between the two modes.
@@ -33,7 +33,7 @@ pub fn run(config: &Config, force: bool) -> Result<()> {
     let version_count = count_versions(&versions_dir);
     let data_mb = dir_size_mb(&config.root);
 
-    let exe_path = std::env::current_exe().context("Cannot determine gvm binary location")?;
+    let exe_path = std::env::current_exe().context("Cannot determine gvsn binary location")?;
 
     let sh = shell::detect();
     let profile_path = sh.as_deref().and_then(|s| s.profile_path());
@@ -42,7 +42,7 @@ pub fn run(config: &Config, force: bool) -> Result<()> {
     println!();
     println!(
         "{} This will permanently remove:",
-        "gvm implode".red().bold()
+        "gvsn implode".red().bold()
     );
     println!();
     println!(
@@ -55,7 +55,7 @@ pub fn run(config: &Config, force: bool) -> Result<()> {
     );
     println!("  {} {}", "->".cyan(), exe_path.display());
     if let Some(ref p) = profile_path {
-        println!("  {} {} (gvm lines removed)", "->".cyan(), p.display());
+        println!("  {} {} (gvsn lines removed)", "->".cyan(), p.display());
     }
     println!();
 
@@ -88,7 +88,7 @@ pub fn run(config: &Config, force: bool) -> Result<()> {
             ),
         }
     }
-    // Also clean the login profile (e.g. ~/.profile) where gvm setup injects
+    // Also clean the login profile (e.g. ~/.profile) where gvsn setup injects
     // the static PATH entry for GUI applications.
     if let Some(ref sh) = sh {
         if let Some(login_profile) = sh.login_profile_path() {
@@ -104,12 +104,12 @@ pub fn run(config: &Config, force: bool) -> Result<()> {
         }
     }
 
-    // ── Remove the binary (last, so earlier errors still have gvm available) ──
+    // ── Remove the binary (last, so earlier errors still have gvsn available) ──
     remove_binary(&exe_path)?;
     println!("  {} Removed {}", "✓".green(), exe_path.display());
 
     println!();
-    println!("{}", "gvm has been completely removed.".green().bold());
+    println!("{}", "gvsn has been completely removed.".green().bold());
     println!("  Open a new terminal to apply the profile changes.");
     println!();
 
@@ -152,11 +152,11 @@ fn dir_size_mb(root: &Path) -> f64 {
 
 // ── Binary removal ────────────────────────────────────────────────────────────
 
-/// Removes the gvm executable.
+/// Removes the gvsn executable.
 ///
 /// On Unix the file is unlinked directly. On Windows a running executable
 /// cannot be deleted while in use, so the binary is first renamed to
-/// `gvm.exe.old` (which succeeds even for a running process) and then an
+/// `gvsn.exe.old` (which succeeds even for a running process) and then an
 /// immediate deletion is attempted. If the deletion fails the `.old` file is
 /// left behind - it is inert and can be deleted manually.
 ///
@@ -166,7 +166,7 @@ fn dir_size_mb(root: &Path) -> f64 {
 fn remove_binary(exe: &Path) -> Result<()> {
     #[cfg(windows)]
     {
-        let old = exe.with_file_name("gvm.exe.old");
+        let old = exe.with_file_name("gvsn.exe.old");
         std::fs::rename(exe, &old).with_context(|| format!("Cannot rename {}", exe.display()))?;
         let _ = std::fs::remove_file(&old); // best-effort; ignored if still locked
     }
@@ -220,7 +220,7 @@ mod tests {
     #[test]
     fn remove_binary_removes_the_file() {
         let dir = tempdir().unwrap();
-        let exe = dir.path().join("gvm-fake-binary");
+        let exe = dir.path().join("gvsn-fake-binary");
         std::fs::write(&exe, b"not a real binary").unwrap();
 
         remove_binary(&exe).unwrap();

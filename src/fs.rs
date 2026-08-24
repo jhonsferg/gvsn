@@ -7,7 +7,7 @@
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
-/// Creates or replaces the `~/.gvm/current` junction/symlink so it points to
+/// Creates or replaces the `~/.gvsn/current` junction/symlink so it points to
 /// `target`.
 ///
 /// On Windows an NTFS junction (reparse point) is used: no elevation and no
@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 /// on Windows shells out to `mklink` and can be blocked by antivirus
 /// software: if it failed after the existing link had already been removed,
 /// `current` would be left pointing at nothing until the next successful
-/// `gvm use`. Building the replacement first means a failure here leaves the
+/// `gvsn use`. Building the replacement first means a failure here leaves the
 /// existing link untouched.
 pub fn set_version_link(link: &Path, target: &Path) -> Result<()> {
     let tmp_link = tmp_link_path(link);
@@ -76,7 +76,7 @@ fn remove_link_if_exists(link: &Path) -> Result<()> {
 fn create_link(link: &Path, target: &Path) -> Result<()> {
     // mklink is a cmd.exe builtin, not a real executable: cmd re-scans its
     // whole command line for "/" followed by a letter as a switch, even
-    // mid-argument. A forward-slash path (e.g. GVM_DIR="C:/Users/x/.gvm",
+    // mid-argument. A forward-slash path (e.g. GVSN_DIR="C:/Users/x/.gvsn",
     // valid everywhere else on Windows, including PowerShell) makes cmd
     // choke on "/Users" as if it were an unknown switch. Normalizing to
     // backslashes first sidesteps the ambiguity entirely.
@@ -127,7 +127,7 @@ fn create_link(link: &Path, target: &Path) -> Result<()> {
 ///
 /// Attempts an atomic rename first. If the rename fails - which happens when
 /// `src` and `dst` reside on different file-system volumes (common on Windows
-/// when the temp directory is on a different drive than `~/.gvm`) - it falls
+/// when the temp directory is on a different drive than `~/.gvsn`) - it falls
 /// back to a recursive copy followed by removal of the source.
 ///
 /// # Errors
@@ -265,12 +265,12 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn windows_backslash_path_converts_forward_slashes() {
-        let path = Path::new("C:/Users/x/.gvm/current");
-        assert_eq!(windows_backslash_path(path), r"C:\Users\x\.gvm\current");
+        let path = Path::new("C:/Users/x/.gvsn/current");
+        assert_eq!(windows_backslash_path(path), r"C:\Users\x\.gvsn\current");
     }
 
     // Regression test for a real failure found while testing on Windows:
-    // GVM_DIR set with forward slashes (valid everywhere on Windows,
+    // GVSN_DIR set with forward slashes (valid everywhere on Windows,
     // including PowerShell) made `cmd /c mklink` choke on "/Users" as if it
     // were an unrecognised switch, because mklink is a cmd.exe builtin that
     // rescans the whole command line for "/<letter>" tokens.
@@ -284,7 +284,7 @@ mod tests {
 
         let link = root.path().join("current");
 
-        // Rebuild both paths using forward slashes, as a user-set GVM_DIR
+        // Rebuild both paths using forward slashes, as a user-set GVSN_DIR
         // containing "/" would produce.
         let link_fwd = Path::new(&link.display().to_string().replace('\\', "/")).to_path_buf();
         let target_fwd = Path::new(&target.display().to_string().replace('\\', "/")).to_path_buf();

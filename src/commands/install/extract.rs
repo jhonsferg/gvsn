@@ -1,4 +1,4 @@
-//! Archive extraction for `gvm install`.
+//! Archive extraction for `gvsn install`.
 
 use anyhow::{Context, Result};
 

@@ -1,5 +1,8 @@
 # Defensive Analysis: Lua-based Trojan Distributed via Cloned Repository
 
+> ℹ️ This project was renamed from `gvm-rs` to `gvsn` in August 2026. This report predates the
+> rename and correctly refers to the project under its former name throughout.
+
 > **Case:** `Foremost-headsail607/gvm-rs` (malicious clone of `jhonsferg/gvm-rs`)
 > **Classification:** Lua-script-loader trojan, consistent with the `Lua/Agent.CQ` family and the
 > 2026 "SmartLoader → StealC" fake-repository campaign

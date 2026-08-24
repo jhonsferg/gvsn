@@ -1,6 +1,6 @@
-//! Shared lookup of gvm's own latest GitHub release.
+//! Shared lookup of gvsn's own latest GitHub release.
 //!
-//! Used by both `gvm upgrade` (which needs to know whether - and what - to
+//! Used by both `gvsn upgrade` (which needs to know whether - and what - to
 //! download) and the background update notifier (which only needs the
 //! version string to compare against). Kept independent of [`crate::http::HttpClient`]
 //! since neither caller needs its verbose-logging/retry machinery here -
@@ -11,12 +11,12 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 
 /// GitHub repository slug used to build the Releases API URL.
-pub const REPO: &str = "jhonsferg/gvm-rs";
+pub const REPO: &str = "jhonsferg/gvsn";
 
-/// Returns the GitHub API base URL, overridable via `GVM_TEST_API_BASE` for
+/// Returns the GitHub API base URL, overridable via `GVSN_TEST_API_BASE` for
 /// local testing without a real GitHub release.
 pub fn api_base() -> String {
-    std::env::var("GVM_TEST_API_BASE").unwrap_or_else(|_| "https://api.github.com".to_owned())
+    std::env::var("GVSN_TEST_API_BASE").unwrap_or_else(|_| "https://api.github.com".to_owned())
 }
 
 /// Minimal shape of the GitHub Releases API response.
@@ -27,7 +27,7 @@ pub struct GithubRelease {
     pub tag_name: String,
 }
 
-/// Fetches the tag name of the latest `jhonsferg/gvm-rs` release, with the
+/// Fetches the tag name of the latest `jhonsferg/gvsn` release, with the
 /// leading `v` stripped.
 ///
 /// `timeout` bounds the entire request (connect + response); callers doing a
@@ -40,7 +40,7 @@ pub struct GithubRelease {
 pub fn fetch_latest_version(timeout: Duration) -> Result<String> {
     let agent = ureq::Agent::config_builder()
         .timeout_global(Some(timeout))
-        .user_agent(format!("gvm/{}", env!("CARGO_PKG_VERSION")))
+        .user_agent(format!("gvsn/{}", env!("CARGO_PKG_VERSION")))
         .build()
         .new_agent();
 

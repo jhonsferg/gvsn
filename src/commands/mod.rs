@@ -1,6 +1,6 @@
 //! Command handlers.
 //!
-//! Each subcommand of `gvm` is implemented in its own submodule. The
+//! Each subcommand of `gvsn` is implemented in its own submodule. The
 //! corresponding `run` function receives a [`crate::config::Config`] reference
 //! (when file-system access is needed) plus any command-specific arguments,
 //! and returns `anyhow::Result<()>`.
