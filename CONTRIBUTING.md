@@ -1,6 +1,6 @@
-# Contributing to gvm
+# Contributing to gvsn
 
-gvm is an actively maintained project and we intend to keep it that way - continuously
+gvsn is an actively maintained project and we intend to keep it that way - continuously
 receiving bug fixes, improvements, and new features. Every contribution matters, whether
 it is a typo fix, a new idea, a bug report, or a full feature implementation.
 **Everyone is welcome to participate and collaborate.** There are no gatekeepers here.
@@ -20,8 +20,8 @@ it is a typo fix, a new idea, a bug report, or a full feature implementation.
 
 ## Before you start coding
 
-- Check [open issues](https://github.com/jhonsferg/gvm-rs/issues) and
-  [pull requests](https://github.com/jhonsferg/gvm-rs/pulls) to avoid duplicate work.
+- Check [open issues](https://github.com/jhonsferg/gvsn/issues) and
+  [pull requests](https://github.com/jhonsferg/gvsn/pulls) to avoid duplicate work.
 - For large changes, open an issue first to discuss the approach. This saves everyone
   time and ensures the work aligns with the project direction.
 
@@ -30,8 +30,8 @@ it is a typo fix, a new idea, a bug report, or a full feature implementation.
 ## Development setup
 
 ```sh
-git clone https://github.com/jhonsferg/gvm-rs.git
-cd gvm-rs
+git clone https://github.com/jhonsferg/gvsn.git
+cd gvsn
 cargo build
 cargo test
 ```
@@ -47,7 +47,7 @@ automatic versioning. Use the correct prefix so the CI can compute the next vers
 
 | Prefix                          | Semver effect | Example                                 |
 | ------------------------------- | ------------- | --------------------------------------- |
-| `feat:`                         | minor bump    | `feat: add gvm pin command`             |
+| `feat:`                         | minor bump    | `feat: add gvsn pin command`             |
 | `fix:`                          | patch bump    | `fix: correct PATH on zsh logout`       |
 | `perf:` / `refactor:`           | patch bump    | `perf: cache remote index`              |
 | `docs:` / `chore:` / `ci:`      | no release    | `docs: update fish setup example`       |
@@ -108,7 +108,7 @@ By contributing you agree that your contributions will be licensed under the
 ## Malicious use and unofficial copies
 
 This project's openness (MIT license, public source, no gatekeeping on contributions) is meant to
-benefit developers, not to provide cover for abuse. Forking and modifying `gvm-rs` is always fine.
+benefit developers, not to provide cover for abuse. Forking and modifying `gvsn` is always fine.
 What is not acceptable, and will be treated as a security incident rather than a licensing dispute,
 is republishing this project (or a modified copy of it) in a way designed to impersonate it while
 distributing malware, credential stealers, or other harmful payloads to people who believe they are
