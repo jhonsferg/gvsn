@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Something gvm does incorrectly or unexpectedly
+about: Something gvsn does incorrectly or unexpectedly
 title: "bug: "
 labels: bug
 assignees: jhonsferg
@@ -24,22 +24,22 @@ assignees: jhonsferg
 
 | Field                    | Value                                     |
 | ------------------------ | ----------------------------------------- |
-| gvm version              | `gvm --version`                           |
+| gvsn version              | `gvsn --version`                           |
 | OS                       | e.g. Ubuntu 24.04 / macOS 15 / Windows 11 |
 | Architecture             | e.g. x86_64 / aarch64                     |
 | Shell                    | e.g. bash 5.2 / zsh / fish / PowerShell 7 |
 | Go version (if relevant) | `go version`                              |
 
-## `gvm doctor` output
+## `gvsn doctor` output
 
 ```
-paste output of: gvm doctor
+paste output of: gvsn doctor
 ```
 
 ## Relevant shell profile snippet
 
 ```sh
-# Paste the gvm-managed lines from your ~/.bashrc / ~/.zshrc / $PROFILE
+# Paste the gvsn-managed lines from your ~/.bashrc / ~/.zshrc / $PROFILE
 ```
 
 ## Additional context
