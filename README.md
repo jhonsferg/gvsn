@@ -52,6 +52,25 @@ gvsn is a Go version manager built from scratch in Rust. It was designed with a 
 - **Self-updating** - `gvsn upgrade` downloads and replaces the binary in-place.
 - **Clean uninstall** - `gvsn implode` removes everything gvsn ever touched.
 
+### 🦀 Why Rust, not Go?
+
+A fair question for a Go tool. A few honest reasons, not a verdict on Go:
+
+- **Memory safety for the riskiest operations.** `gvsn upgrade` replaces its own running binary,
+  `gvsn setup` writes to your shell profile and the Windows registry PATH, and `gvsn implode`
+  deletes files across your home directory. These are exactly the operations where a memory bug
+  turns into a corrupted install or a broken shell - Rust's ownership model rules out that class
+  of bug at compile time.
+- **A mature, boring cross-compilation story.** Twelve target platforms build from one codebase,
+  with static linking handled by `cross` and musl/static-MSVC targets - no per-platform toolchain
+  juggling to maintain.
+- **Not depending on the exact ecosystem it manages.** Both Go and Rust produce standalone static
+  binaries, so "you don't need Go to install Go" isn't unique to Rust - but keeping this tool's own
+  build independent of the toolchain it manages felt like the right instinct.
+
+Plenty of excellent Go version managers are written in Go itself - this was a deliberate choice for
+this project, not a claim that Rust is categorically the right call for CLI tooling.
+
 ---
 
 ## 🚀 Features
