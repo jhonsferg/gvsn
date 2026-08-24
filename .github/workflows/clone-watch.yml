@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   scan:
-    if: github.repository == 'jhonsferg/gvm-rs'
+    if: github.repository == 'jhonsferg/gvsn'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -32,6 +32,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OWNER: jhonsferg
-          REPO_NAME: gvm-rs
+          REPO_NAME: gvsn
           AUTHOR_EMAIL: jhon.fernandez.sg@gmail.com
         run: bash .github/scripts/clone-watch.sh
