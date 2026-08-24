@@ -1,5 +1,10 @@
 # Incident: malware distribution via a cloned repository
 
+> ℹ️ This project was renamed from `gvm-rs` to `gvsn` in August 2026. This is the formal incident
+> record as originally filed and preserved exactly as written - it correctly refers to the project
+> under its former name throughout, and the linked issue lives in the project's original
+> repository, [`jhonsferg/gvm-rs`](https://github.com/jhonsferg/gvm-rs).
+
 - **Status:** Active (confirmed as of 2026-08-22)
 - **Malicious repository:** [`Foremost-headsail607/gvm-rs`](https://github.com/Foremost-headsail607/gvm-rs)
 - **Detected via:** this repository's automated clone-watch pipeline
