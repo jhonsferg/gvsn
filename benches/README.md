@@ -1,6 +1,6 @@
 # Benchmarks
 
-Local-only performance benchmarks (`cargo bench`, [criterion](https://github.com/bheisler/criterion.rs)) for gvm's pure-computation hot paths.
+Local-only performance benchmarks (`cargo bench`, [criterion](https://github.com/bheisler/criterion.rs)) for gvsn's pure-computation hot paths.
 
 ## Running
 
