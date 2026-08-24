@@ -2,13 +2,14 @@
 
 > ℹ️ This project was renamed from `gvm-rs` to `gvsn` in August 2026. This is the formal incident
 > record as originally filed and preserved exactly as written - it correctly refers to the project
-> under its former name throughout, and the linked issue lives in the project's original
-> repository, [`jhonsferg/gvm-rs`](https://github.com/jhonsferg/gvm-rs).
+> under its former name throughout. The project's original repository, `jhonsferg/gvm-rs`, has
+> since been deleted, so the issue link below no longer resolves; this document is the surviving
+> record of what that issue reported.
 
 - **Status:** Active (confirmed as of 2026-08-22)
 - **Malicious repository:** [`Foremost-headsail607/gvm-rs`](https://github.com/Foremost-headsail607/gvm-rs)
-- **Detected via:** this repository's automated clone-watch pipeline
-  ([issue #53](https://github.com/jhonsferg/gvm-rs/issues/53))
+- **Detected via:** this repository's automated clone-watch pipeline (issue `jhonsferg/gvm-rs#53` -
+  no longer reachable, see note above)
 - **Reported to GitHub:** yes, via the [abuse report form](https://github.com/contact/report-abuse)
   on 2026-07-20T20:42:00Z (Ticket ID `4587510`); the response received on 2026-07-21T11:50:00Z did
   not address the report - see [§D](#d-githubs-response-to-the-first-report)

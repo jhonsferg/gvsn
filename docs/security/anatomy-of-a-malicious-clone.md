@@ -457,7 +457,8 @@ obvious typosquat names before an attacker does.
 **Primary evidence (this analysis):**
 - Incident record: [`incidents/2026-06-malicious-clone-foremost-headsail607.md`](incidents/2026-06-malicious-clone-foremost-headsail607.md)
 - Technical analysis: [`lua-trojan-defensive-analysis.md`](lua-trojan-defensive-analysis.md)
-- Detection trigger: this repo's clone-watch, [issue #53](https://github.com/jhonsferg/gvm-rs/issues/53)
+- Detection trigger: this repo's clone-watch, issue `jhonsferg/gvm-rs#53` (that repository has
+  since been deleted as part of this project's rename to `gvsn`; the link no longer resolves)
 - Function selector `0x3bc5de30` → `getData()`: [4byte.directory signature #2015](https://www.4byte.directory/signatures/?bytes4_signature=0x3bc5de30)
 
 **Techniques:**
