@@ -1,0 +1,24 @@
+[package]
+name = "gvsn-platform"
+description = "Platform layer of gvsn: current link and Windows user PATH"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+# `unsafe` stays at `deny` (not `forbid`, which admits no exceptions) only to
+# allow the single justified call: the WM_SETTINGCHANGE broadcast in
+# `user_path`.
+[lints.rust]
+unsafe_code = "deny"
+
+[dependencies]
+anyhow.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+winreg.workspace = true
+windows-sys.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
