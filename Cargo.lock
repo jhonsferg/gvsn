@@ -730,6 +730,59 @@ dependencies = [
 ]
 
 [[package]]
+name = "gvsn-core"
+version = "1.5.1"
+dependencies = [
+ "anyhow",
+ "colored",
+ "criterion",
+ "dirs",
+ "flate2",
+ "fs2",
+ "gvsn-net",
+ "gvsn-platform",
+ "indicatif",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tar",
+ "tempfile",
+ "ureq",
+ "zip",
+]
+
+[[package]]
+name = "gvsn-net"
+version = "1.5.1"
+dependencies = [
+ "anyhow",
+ "colored",
+ "indicatif",
+ "tempfile",
+ "ureq",
+]
+
+[[package]]
+name = "gvsn-platform"
+version = "1.5.1"
+dependencies = [
+ "anyhow",
+ "tempfile",
+ "windows-sys 0.61.2",
+ "winreg",
+]
+
+[[package]]
+name = "gvsn-shell"
+version = "1.5.1"
+dependencies = [
+ "anyhow",
+ "criterion",
+ "dirs",
+ "tempfile",
+]
+
+[[package]]
 name = "half"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
