@@ -151,18 +151,24 @@ jobs:
       #
       # sed note: macOS uses BSD sed which does not support GNU-only 0,/pat/
       # address ranges. The simple s/^version = .../ pattern is portable because
-      # only the [package] version line starts at column 0 in our Cargo.toml.
+      # only the [workspace.package] version line starts at column 0 in the root
+      # Cargo.toml. The internal crates are also pinned by version in
+      # [workspace.dependencies] (crates.io requires it), so those are synced too.
       # Cargo.lock needs a two-line match so perl is used there instead.
       - name: Set version from tag
         shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           # Cargo.toml - simple substitution, no GNU-only address ranges
-          sed -i.bak 's/^version = "[^"]*"/version = "'"${VERSION}"'"/' Cargo.toml
+          sed -i.bak \
+            -e 's/^version = "[^"]*"/version = "'"${VERSION}"'"/' \
+            -e 's/\(path = "crates\/gvsn-[a-z]*", version = "\)[^"]*"/\1'"${VERSION}"'"/' \
+            Cargo.toml
           rm -f Cargo.toml.bak
-          # Cargo.lock - stateful perl: set flag on name = "gvsn", replace version on next line.
+          # Cargo.lock - stateful perl: set flag on name = "gvsn" or any internal
+          # "gvsn-*" crate, replace version on next line.
           # \r? makes the pattern work on both LF (Linux/macOS) and CRLF (Windows checkout).
-          perl -i.bak -pe 'if (/^name = "gvsn"\r?$/) { $f=1 } elsif ($f) { s/^version = "[^"]*"/version = "'"${VERSION}"'"/; $f=0 }' Cargo.lock
+          perl -i.bak -pe 'if (/^name = "gvsn(-[a-z]+)?"\r?$/) { $f=1 } elsif ($f) { s/^version = "[^"]*"/version = "'"${VERSION}"'"/; $f=0 }' Cargo.lock
           rm -f Cargo.lock.bak
           echo "Version set to ${VERSION}"
           grep '^version' Cargo.toml
@@ -488,13 +494,19 @@ jobs:
           TAG="${{ github.ref_name }}"
           TAG_VERSION="${TAG#v}"
           echo "Setting Cargo.toml version to ${TAG_VERSION} (from tag ${TAG})"
-          sed -i "0,/^version = \".*\"/s//version = \"${TAG_VERSION}\"/" Cargo.toml
-          grep -m1 '^version' Cargo.toml
+          sed -i \
+            -e "s/^version = \".*\"/version = \"${TAG_VERSION}\"/" \
+            -e "s/\(path = \"crates\/gvsn-[a-z]*\", version = \"\)[^\"]*\"/\1${TAG_VERSION}\"/" \
+            Cargo.toml
+          grep -E '^version|path = "crates/' Cargo.toml
 
+      # Publishes every workspace crate (gvsn-platform, gvsn-net, gvsn-shell,
+      # gvsn-core and the `gvsn` binary) in dependency order, so each internal
+      # crate is on crates.io before the crates that depend on it.
       - name: cargo publish
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         # --allow-dirty: the version sync above intentionally modifies Cargo.toml
         # without committing (see comment above) - cargo publish otherwise
         # refuses to package a working directory with uncommitted changes.
-        run: cargo publish --allow-dirty
+        run: cargo publish --workspace --allow-dirty
