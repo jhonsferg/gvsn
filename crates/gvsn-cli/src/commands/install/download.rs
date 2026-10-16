@@ -9,14 +9,16 @@ use gvsn_core::{
     remote::{index, release::Release},
     version::GoVersion,
 };
-use gvsn_net::{download, http::HttpClient};
+use gvsn_net::http::HttpClient;
+
+use crate::progress;
 
 /// Downloads the archive for the specified version.
 pub fn download_archive(
     client: &HttpClient,
     config: &Config,
     release: &Release,
-    _version: &GoVersion,
+    version: &GoVersion,
 ) -> Result<ReleaseArchive> {
     let file = release
         .archive_for(index::host_os(), index::host_arch())
@@ -33,7 +35,7 @@ pub fn download_archive(
 
     println!("{} Downloading {}...", "->".cyan(), file.filename.bold());
 
-    download::fetch(client, &url, &archive_path)
+    progress::fetch_with_bar(client, &url, &archive_path, &version.tag())
         .with_context(|| format!("Failed to download {}", file.filename))?;
 
     println!("{} Verifying checksum...", "->".cyan());
