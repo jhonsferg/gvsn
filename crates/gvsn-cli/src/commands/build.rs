@@ -39,10 +39,10 @@ use gvsn_core::{
     toolchain,
     user_version::VersionSpec,
 };
-use gvsn_net::{download, http::HttpClient};
+use gvsn_net::http::HttpClient;
 use gvsn_platform::fs as gvsn_fs;
 
-use crate::commands::bootstrap;
+use crate::{commands::bootstrap, progress};
 
 /// Compiles `version_str` from source and installs it to the gvsn versions store.
 pub fn run(
@@ -130,10 +130,11 @@ pub fn run(
             "->".cyan(),
             src_file.filename.bold()
         );
-        if let Err(e) = download::fetch(
+        if let Err(e) = progress::fetch_with_bar(
             client,
             &index::download_url(&src_file.filename),
             &src_archive,
+            &format!("{} src", version.tag()),
         ) {
             let _ = std::fs::remove_file(&src_archive);
             bootstrap::cleanup_bootstrap(&bootstrap);
