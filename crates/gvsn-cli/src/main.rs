@@ -11,6 +11,7 @@
 mod cli;
 mod commands;
 mod dispatch;
+mod progress;
 mod prompt;
 mod update_check;
 
