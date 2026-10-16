@@ -20,6 +20,9 @@
 //! On any network error the download retries up to [`HttpClient::retries`]
 //! times using exponential back-off (1 s, 2 s, 4 s, …).
 //!
+//! Progress goes to a [`ProgressSink`]; this module draws nothing. The
+//! terminal progress bar lives in the CLI.
+//!
 //! This module does not verify integrity: the caller checks the SHA-256 of
 //! the completed file (see `gvsn-core`) before extracting it.
 
@@ -31,7 +34,6 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use colored::Colorize;
-use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::http::HttpClient;
 
@@ -40,28 +42,76 @@ use crate::http::HttpClient;
 /// link's throughput as possible.
 const READ_BUF_SIZE: usize = 1024 * 1024;
 
-/// Downloads `url` to `dest` over a single HTTP stream.
+/// Receiver of a download's progress. Implement it to show a progress bar;
+/// the library draws nothing on its own.
 ///
-/// Reads the retry limit from the `HttpClient`.
+/// `on_start` is called at the start of each attempt (also after a retry) and
+/// resets the counter. If the download is resumed, `on_bytes` first receives
+/// the bytes that were already in the `.part` file.
+pub trait ProgressSink {
+    /// Expected total size in bytes. `0` if the server does not report it.
+    fn on_start(&self, total: u64);
+
+    /// New bytes written to the temporary destination.
+    fn on_bytes(&self, n: u64);
+}
+
+/// Null receiver: discards progress. It is the default for [`fetch`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct NoProgress;
+
+impl ProgressSink for NoProgress {
+    fn on_start(&self, _total: u64) {}
+
+    fn on_bytes(&self, _n: u64) {}
+}
+
+/// Downloads `url` to `dest` over a single HTTP stream, without reporting
+/// progress.
+///
+/// Equivalent to [`fetch_with_progress`] with [`NoProgress`].
 ///
 /// # Errors
 ///
 /// Returns an error if the server is unreachable, all retries are
 /// exhausted, or `dest` cannot be written to.
 pub fn fetch(client: &HttpClient, url: &str, dest: &Path) -> Result<()> {
+    fetch_with_progress(client, url, dest, &NoProgress)
+}
+
+/// Downloads `url` to `dest` over a single HTTP stream, reporting progress
+/// to `progress`.
+///
+/// Reads the retry limit from the `HttpClient`.
+///
+/// # Errors
+///
+/// Same as [`fetch`].
+pub fn fetch_with_progress(
+    client: &HttpClient,
+    url: &str,
+    dest: &Path,
+    progress: &dyn ProgressSink,
+) -> Result<()> {
     let retries = client.retries();
-    fetch_single(client, url, dest, retries)
+    fetch_single(client, url, dest, retries, progress)
 }
 
 /// Single-connection download with retry and transparent resume.
-fn fetch_single(client: &HttpClient, url: &str, dest: &Path, retries: u8) -> Result<()> {
+fn fetch_single(
+    client: &HttpClient,
+    url: &str,
+    dest: &Path,
+    retries: u8,
+    progress: &dyn ProgressSink,
+) -> Result<()> {
     let part = part_path(dest);
     let mut attempt = 0u8;
 
     loop {
         let existing = part.metadata().map(|m| m.len()).unwrap_or(0);
 
-        match try_fetch(client, url, &part, existing) {
+        match try_fetch(client, url, &part, existing, progress) {
             Ok(()) => {
                 std::fs::rename(&part, dest)
                     .with_context(|| format!("Cannot finalise {}", dest.display()))?;
@@ -87,10 +137,16 @@ fn fetch_single(client: &HttpClient, url: &str, dest: &Path, retries: u8) -> Res
 /// Performs a single GET request and streams the body to `part` with a
 /// large read buffer ([`READ_BUF_SIZE`]) to keep per-syscall overhead low.
 ///
-/// Sizes the progress bar from the GET response's own headers - no separate
+/// Reports the total size from the GET response's own headers - no separate
 /// HEAD request, so there is only ever one redirect round-trip per attempt
 /// instead of two.
-fn try_fetch(client: &HttpClient, url: &str, part: &Path, offset: u64) -> Result<()> {
+fn try_fetch(
+    client: &HttpClient,
+    url: &str,
+    part: &Path,
+    offset: u64,
+    progress: &dyn ProgressSink,
+) -> Result<()> {
     crate::http::log_request(client, "GET", url);
 
     let mut req = client
@@ -121,7 +177,7 @@ fn try_fetch(client: &HttpClient, url: &str, part: &Path, offset: u64) -> Result
     // x-identity-content-length, even on a 206 response, so it doesn't need
     // adjusting for the current offset. Plain content-length is only the
     // size of the remaining bytes on a 206, so add offset back to get the
-    // total for the progress bar.
+    // total for the progress report.
     let headers = response.headers();
     let total_length = headers
         .get("x-identity-content-length")
@@ -140,8 +196,10 @@ fn try_fetch(client: &HttpClient, url: &str, part: &Path, offset: u64) -> Result
             }
         });
 
-    let pb = progress_bar(total_length, if resuming { offset } else { 0 });
-    pb.enable_steady_tick(Duration::from_millis(120));
+    progress.on_start(total_length);
+    if resuming {
+        progress.on_bytes(offset);
+    }
 
     let mut file: File = if resuming {
         OpenOptions::new()
@@ -154,54 +212,20 @@ fn try_fetch(client: &HttpClient, url: &str, part: &Path, offset: u64) -> Result
 
     let mut reader = response.body_mut().as_reader();
     let mut buf = vec![0u8; READ_BUF_SIZE];
-    let result = (|| -> Result<()> {
-        loop {
-            let n = reader.read(&mut buf).context("Download interrupted")?;
-            if n == 0 {
-                break;
-            }
-            file.write_all(&buf[..n]).context("Write failed")?;
-            pb.inc(n as u64);
+    loop {
+        let n = reader.read(&mut buf).context("Download interrupted")?;
+        if n == 0 {
+            break;
         }
-        Ok(())
-    })();
-
-    pb.finish_and_clear();
-    result
+        file.write_all(&buf[..n]).context("Write failed")?;
+        progress.on_bytes(n as u64);
+    }
+    Ok(())
 }
 
 /// Returns the path used for the in-progress download: `"{dest}.part"`.
 fn part_path(dest: &Path) -> PathBuf {
     PathBuf::from(format!("{}.part", dest.to_string_lossy()))
-}
-
-/// Builds the progress bar for the download.
-///
-/// When `content_length > 0` returns a determinate bar pre-positioned at
-/// `existing` bytes (to reflect a resumed transfer). Otherwise returns a
-/// spinner.
-fn progress_bar(content_length: u64, existing: u64) -> ProgressBar {
-    if content_length > 0 {
-        let bar = ProgressBar::new(content_length);
-        bar.set_position(existing);
-        bar.set_style(
-            ProgressStyle::default_bar()
-                .template(
-                    "  [{bar:40.cyan/blue}] {bytes}/{total_bytes}  {bytes_per_sec}  eta {eta}",
-                )
-                .unwrap()
-                .progress_chars("=>-"),
-        );
-        bar
-    } else {
-        let bar = ProgressBar::new_spinner();
-        bar.set_style(
-            ProgressStyle::default_spinner()
-                .template("  {spinner:.cyan}  {bytes}  {bytes_per_sec}")
-                .unwrap(),
-        );
-        bar
-    }
 }
 
 /// Exponential back-off in seconds for retry attempt `n` (1-based): 1, 2, 4, 8 …
@@ -229,19 +253,6 @@ mod tests {
         assert_eq!(backoff(2), 2);
         assert_eq!(backoff(3), 4);
         assert_eq!(backoff(4), 8);
-    }
-
-    #[test]
-    fn progress_bar_is_determinate_when_length_known() {
-        let bar = progress_bar(1000, 250);
-        assert_eq!(bar.length(), Some(1000));
-        assert_eq!(bar.position(), 250);
-    }
-
-    #[test]
-    fn progress_bar_is_spinner_when_length_unknown() {
-        let bar = progress_bar(0, 0);
-        assert_eq!(bar.length(), None);
     }
 
     #[test]
@@ -308,11 +319,34 @@ mod tests {
 
         let client = HttpClient::new(false, 0).unwrap();
         let url = format!("http://{addr}/file.bin");
-        fetch(&client, &url, &dest).unwrap();
+        let progress = RecordingProgress::default();
+        fetch_with_progress(&client, &url, &dest, &progress).unwrap();
 
         server.join().unwrap();
 
         assert_eq!(std::fs::read(&dest).unwrap(), full_content);
         assert!(!part_path(&dest).exists());
+        // The total covers the whole file, and the bytes already on disk are
+        // reported before the new ones, so the bar ends at 100%.
+        assert_eq!(progress.total.get(), full_content.len() as u64);
+        assert_eq!(progress.bytes.get(), full_content.len() as u64);
+    }
+
+    /// Sink that remembers what it was told, for asserting on progress.
+    #[derive(Default)]
+    struct RecordingProgress {
+        total: std::cell::Cell<u64>,
+        bytes: std::cell::Cell<u64>,
+    }
+
+    impl ProgressSink for RecordingProgress {
+        fn on_start(&self, total: u64) {
+            self.total.set(total);
+            self.bytes.set(0);
+        }
+
+        fn on_bytes(&self, n: u64) {
+            self.bytes.set(self.bytes.get() + n);
+        }
     }
 }
