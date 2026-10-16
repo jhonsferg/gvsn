@@ -12,7 +12,9 @@ use gvsn_core::{
     user_version::VersionSpec,
     version::GoVersion,
 };
-use gvsn_net::{download, http::HttpClient};
+use gvsn_net::http::HttpClient;
+
+use crate::progress;
 use std::path::PathBuf;
 
 /// Represents a resolved bootstrap compiler.
@@ -114,10 +116,11 @@ pub fn resolve_bootstrap(
     );
 
     let archive_path = config.tmp_dir().join(&b_archive.filename);
-    if let Err(e) = download::fetch(
+    if let Err(e) = progress::fetch_with_bar(
         client,
         &index::download_url(&b_archive.filename),
         &archive_path,
+        &b_version.tag(),
     ) {
         let _ = std::fs::remove_file(&archive_path);
         return Err(e).context("Failed to download bootstrap compiler");
