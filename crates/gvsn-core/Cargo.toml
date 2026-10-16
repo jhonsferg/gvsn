@@ -1,0 +1,44 @@
+[package]
+name = "gvsn-core"
+description = "Domain logic of gvsn: Go versions, toolchain store and release index"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+colored.workspace = true
+dirs.workspace = true
+flate2.workspace = true
+fs2.workspace = true
+gvsn-net.workspace = true
+gvsn-platform.workspace = true
+indicatif.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tar.workspace = true
+tempfile.workspace = true
+ureq.workspace = true
+zip.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+
+# Local-only performance benchmarks (`cargo bench -p gvsn-core`). `test = false`
+# keeps `cargo test --all-targets` (what CI runs) from also invoking this
+# binary: without it, cargo forwards CI's libtest flags (e.g. `--nocapture`) to
+# the criterion binary, which does not understand them and fails the build.
+# See the "Benchmarks" section in CONTRIBUTING.md for the local-only policy
+# this enforces. The source lives in `.benches/` (not Cargo's default
+# `benches/`) so it does not show up as a top-level directory in the crate.
+[[bench]]
+name = "hot_paths"
+path = ".benches/hot_paths.rs"
+harness = false
+test = false
