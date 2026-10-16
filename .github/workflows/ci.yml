@@ -42,7 +42,7 @@ jobs:
         with:
           filters: |
             code:
-              - "src/**"
+              - "crates/**"
               - "Cargo.toml"
               - "Cargo.lock"
               - "build.rs"
@@ -127,7 +127,7 @@ jobs:
   #   feat!: / BREAKING CHANGE  -> major
   #   feat:                      -> minor
   #   fix: / perf: / refactor: / security:  -> patch
-  #   docs: / chore: / ci:, or no src/Cargo.*/build.rs/rust-toolchain.toml change -> no release
+  #   docs: / chore: / ci:, or no crates/Cargo.*/build.rs/rust-toolchain.toml change -> no release
   auto-release:
     name: Auto Tag & Release
     needs: [lint, test]
@@ -193,7 +193,7 @@ jobs:
             echo "Changed files since ${LATEST_TAG}:"
             echo "$CHANGED_FILES"
 
-            if ! echo "$CHANGED_FILES" | grep -qE '^(src/|Cargo\.toml$|Cargo\.lock$|build\.rs$|rust-toolchain\.toml$)'; then
+            if ! echo "$CHANGED_FILES" | grep -qE '^(crates/|Cargo\.toml$|Cargo\.lock$|build\.rs$|rust-toolchain\.toml$)'; then
               echo "Commit prefix implies a release, but no code/dependency files changed - skipping."
               BUMP="none"
             fi
