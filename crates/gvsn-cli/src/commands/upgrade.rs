@@ -26,7 +26,9 @@ use gvsn_core::{
     gvsn_release::{api_base, parse_semver, GithubRelease, REPO},
     lock,
 };
-use gvsn_net::{download, http::HttpClient};
+use gvsn_net::http::HttpClient;
+
+use crate::progress;
 
 /// Returns the GitHub download base URL, overridable via `GVSN_TEST_DL_BASE`.
 fn dl_base() -> String {
@@ -102,7 +104,8 @@ pub fn run(config: &Config, client: &HttpClient, force: bool) -> Result<()> {
     println!("{} Downloading {}...", "->".cyan(), archive_name.bold());
 
     let tmp_archive = tmp_archive_path()?;
-    if let Err(e) = download::fetch(client, &url, &tmp_archive) {
+    let label = format!("gvsn v{latest_tag}");
+    if let Err(e) = progress::fetch_with_bar(client, &url, &tmp_archive, &label) {
         let _ = std::fs::remove_file(&tmp_archive);
         return Err(e);
     }
