@@ -756,7 +756,6 @@ version = "1.5.1"
 dependencies = [
  "anyhow",
  "colored",
- "indicatif",
  "tempfile",
  "ureq",
 ]
