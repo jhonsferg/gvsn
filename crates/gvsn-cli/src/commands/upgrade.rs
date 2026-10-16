@@ -237,7 +237,7 @@ fn extract_upgrade_binary(archive: &Path) -> Result<std::path::PathBuf> {
 
         for i in 0..zip.len() {
             let mut entry = zip.by_index(i).context("Failed to read zip entry")?;
-            if entry.name() == binary_filename {
+            if entry.name_raw() == binary_filename.as_bytes() {
                 let mut dest =
                     std::fs::File::create(&out).context("Cannot create temp binary file")?;
                 std::io::copy(&mut entry, &mut dest)
