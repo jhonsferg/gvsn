@@ -1,0 +1,31 @@
+[package]
+name = "gvsn-shell"
+description = "Shell integration scripts and profile management for gvsn"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+dirs.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+tempfile.workspace = true
+
+# Local-only performance benchmark (`cargo bench -p gvsn-shell`). `test = false`
+# keeps `cargo test --all-targets` (what CI runs) from also invoking this
+# binary; see crates/gvsn-core/Cargo.toml for the full rationale and the
+# "Benchmarks" section in CONTRIBUTING.md for the local-only policy. The
+# source lives in `.benches/` (not Cargo's default `benches/`) so it does not
+# show up as a top-level directory in the crate.
+[[bench]]
+name = "hot_paths"
+path = ".benches/hot_paths.rs"
+harness = false
+test = false
