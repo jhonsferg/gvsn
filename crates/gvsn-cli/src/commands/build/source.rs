@@ -8,7 +8,9 @@ use gvsn_core::{
     remote::{index, release::Release},
     tempdir::TempDir,
 };
-use gvsn_net::{download, http::HttpClient};
+use gvsn_net::http::HttpClient;
+
+use crate::progress;
 
 /// Downloads and verifies the Go source tarball for the given release.
 pub fn download_source(
@@ -33,7 +35,12 @@ pub fn download_source(
         src_file.filename.bold()
     );
 
-    download::fetch(client, &index::download_url(&src_file.filename), &src_archive)
+    progress::fetch_with_bar(
+        client,
+        &index::download_url(&src_file.filename),
+        &src_archive,
+        &format!("{} src", version.tag()),
+    )
         .with_context(|| format!("Failed to download source tarball {}", src_file.filename))?;
 
     // Verify SHA-256 checksum.
