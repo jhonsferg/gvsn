@@ -1,0 +1,38 @@
+# The package keeps the name `gvsn` so `cargo install gvsn` keeps working.
+[package]
+name = "gvsn"
+description = "A fast, cross-platform Go version manager written in Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "../../README.md"
+keywords = ["go", "golang", "version-manager", "toolchain", "gvsn"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "gvsn"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+clap_complete.workspace = true
+colored.workspace = true
+dirs.workspace = true
+flate2.workspace = true
+gvsn-core.workspace = true
+gvsn-net.workspace = true
+gvsn-platform.workspace = true
+gvsn-shell.workspace = true
+indicatif.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tar.workspace = true
+tempfile.workspace = true
+ureq.workspace = true
+zip.workspace = true
