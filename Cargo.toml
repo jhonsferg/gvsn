@@ -57,3 +57,49 @@ lto           = true
 strip         = true
 codegen-units = 1
 panic         = "abort"
+
+[workspace]
+resolver = "2"
+members = [
+    "crates/gvsn-platform",
+    "crates/gvsn-net",
+    "crates/gvsn-shell",
+    "crates/gvsn-core",
+]
+
+[workspace.package]
+version = "1.5.1"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/jhonsferg/gvsn"
+homepage = "https://github.com/jhonsferg/gvsn"
+
+[workspace.dependencies]
+# Internal crates. `version` is required to publish to crates.io and is kept
+# in sync with [workspace.package] by the release workflow.
+gvsn-core     = { path = "crates/gvsn-core", version = "1.5.1" }
+gvsn-net      = { path = "crates/gvsn-net", version = "1.5.1" }
+gvsn-platform = { path = "crates/gvsn-platform", version = "1.5.1" }
+gvsn-shell    = { path = "crates/gvsn-shell", version = "1.5.1" }
+
+anyhow         = "1"
+clap           = { version = "4",    features = ["derive", "color"] }
+clap_complete  = "4"
+colored        = "3"
+criterion      = "0.5"
+dirs           = "6"
+flate2         = "1"
+fs2            = "0.4"
+indicatif      = "0.18"
+serde          = { version = "1",    features = ["derive"] }
+serde_json     = "1"
+sha2           = "0.11"
+tar            = "0.4"
+tempfile       = "3"
+ureq           = { version = "3",    features = ["rustls", "json"] }
+windows-sys    = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+winreg         = "0.52"
+zip            = "2"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
