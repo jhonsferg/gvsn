@@ -9,14 +9,16 @@
 # content-based check.
 #
 # Must be run from a checkout of this repository - it reads the local
-# Cargo.toml/README.md/src/shell/mod.rs as the canonical fingerprints and
+# Cargo.toml/README.md/shell module as the canonical fingerprints and
 # fetches the candidate's copies via the GitHub Contents API for comparison.
 #
 # Usage: clone-similarity.sh <owner> <repo>
 # Prints one line to stdout: SCORE=<0-100> SIGNALS=<comma-separated,or none>
 #
 # Signals and their weight:
-#   source-fingerprint (70) - candidate's src/shell/mod.rs contains both of
+#   source-fingerprint (70) - candidate's shell module (src/shell/mod.rs, or
+#                             crates/gvsn-shell/src/shell/mod.rs in the
+#                             workspace layout) contains both of
 #                             this project's distinctive internal markers
 #                             ("# gvsn init", "_gvsn_hook"). This is the load-
 #                             bearing signal: those two literal strings
@@ -29,7 +31,8 @@
 #                             Deliberately high bar: generic "Installation" /
 #                             "Usage" section headers overlap between any two
 #                             CLI tool READMEs, so a low bar produces noise.
-#   cargo-package-name  (10) - candidate's Cargo.toml declares the exact
+#   cargo-package-name  (10) - candidate's Cargo.toml (root, or
+#                             crates/gvsn-cli/Cargo.toml) declares the exact
 #                             package name "gvsn". Kept as a weak,
 #                             corroborating-only signal - deliberately NOT
 #                             enough by itself to move the needle, since a
@@ -65,11 +68,16 @@ score=0
 signals=()
 
 # --- Signal: distinctive source fingerprint (dominant) ---
-their_shell="$(fetch_file "src/shell/mod.rs")"
-if [ -n "$their_shell" ] && echo "$their_shell" | grep -q '# gvsn init' && echo "$their_shell" | grep -q '_gvsn_hook'; then
-  score=$((score + 70))
-  signals+=("source-fingerprint:src/shell/mod.rs")
-fi
+# Checks both the single-crate path and the workspace path, so copies made
+# before and after the move to crates/ are both detected.
+for shell_path in "src/shell/mod.rs" "crates/gvsn-shell/src/shell/mod.rs"; do
+  their_shell="$(fetch_file "$shell_path")"
+  if [ -n "$their_shell" ] && echo "$their_shell" | grep -q '# gvsn init' && echo "$their_shell" | grep -q '_gvsn_hook'; then
+    score=$((score + 70))
+    signals+=("source-fingerprint:${shell_path}")
+    break
+  fi
+done
 
 # --- Signal: README.md line-level overlap (high bar) ---
 their_readme="$(fetch_file "README.md")"
@@ -86,11 +94,14 @@ if [ -n "$their_readme" ]; then
 fi
 
 # --- Signal: Cargo.toml package identity (weak, corroborating only) ---
-their_cargo="$(fetch_file "Cargo.toml")"
-if [ -n "$their_cargo" ] && echo "$their_cargo" | grep -qE '^[[:space:]]*name[[:space:]]*=[[:space:]]*"gvsn"[[:space:]]*$'; then
-  score=$((score + 10))
-  signals+=("cargo-package-name")
-fi
+for cargo_path in "Cargo.toml" "crates/gvsn-cli/Cargo.toml"; do
+  their_cargo="$(fetch_file "$cargo_path")"
+  if [ -n "$their_cargo" ] && echo "$their_cargo" | grep -qE '^[[:space:]]*name[[:space:]]*=[[:space:]]*"gvsn"[[:space:]]*$'; then
+    score=$((score + 10))
+    signals+=("cargo-package-name")
+    break
+  fi
+done
 
 if [ "$score" -gt 100 ]; then score=100; fi
 
